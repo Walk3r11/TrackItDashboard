@@ -36,7 +36,8 @@ type CardItem = {
 };
 
 const dateLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-const apiBase = (process.env.NEXT_PUBLIC_API_BASE ?? "").replace(/\/$/, "");
+// Force API calls to the backend host (avoid accidental path concatenation)
+const apiBase = "https://trackit-dashboard-beryl.vercel.app";
 const euroCutover = new Date("2026-01-01T00:00:00Z");
 const bgnToEur = 1.95583;
 
