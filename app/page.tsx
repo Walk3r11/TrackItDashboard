@@ -36,7 +36,7 @@ type CardItem = {
 };
 
 const dateLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-const apiBase = "https://trackit-dashboard-beryl.vercel.app";
+const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "https://trackit-dashboard-beryl.vercel.app";
 const euroCutover = new Date("2026-01-01T00:00:00Z");
 const bgnToEur = 1.95583;
 
@@ -50,6 +50,11 @@ export default function Page() {
   const [cards, setCards] = useState<CardItem[]>([]);
   const [ticketStatus, setTicketStatus] = useState<"all" | "open" | "pending" | "closed">("all");
   const [showOverview, setShowOverview] = useState(false);
+  const [txRange, setTxRange] = useState<"all" | "7d" | "30d">("all");
+  const [txQuery, setTxQuery] = useState("");
+  const [modalTicketStatus, setModalTicketStatus] = useState<"all" | "open" | "pending" | "closed">("all");
+  const [activityExpanded, setActivityExpanded] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -121,11 +126,16 @@ export default function Page() {
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error("Cards request failed");
       const body = await res.json();
+      const toNumber = (val: any): number => {
+        if (typeof val === "number") return val;
+        const num = Number(val);
+        return isNaN(num) ? 0 : num;
+      };
       const mapped: CardItem[] = (body.cards ?? []).map((card: any) => ({
         id: card.id,
         name: card.nickname || "Card",
-        balance: typeof card.balance === "number" ? card.balance : 0,
-        limit: typeof card.card_limit === "number" ? card.card_limit : 0,
+        balance: toNumber(card.balance),
+        limit: toNumber(card.card_limit),
         tags: Array.isArray(card.tags) ? card.tags : undefined
       }));
       setCards(mapped);
@@ -233,73 +243,190 @@ export default function Page() {
         </section>
 
         {showOverview && user && (
-          <div className="backdrop" onClick={() => setShowOverview(false)}>
-            <div className="alert-card slide-up" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-start justify-between gap-3 mb-4">
+          <div
+            className={`backdrop ${closing ? "closing" : ""}`}
+            onClick={() => {
+              setClosing(true);
+              setTimeout(() => {
+                setShowOverview(false);
+                setClosing(false);
+                setActivityExpanded(false);
+              }, 220);
+            }}
+          >
+            <div
+              className={`alert-card max-w-6xl w-[92vw] ${closing ? "closing" : "slide-up"}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 mb-6">
                 <div>
-                  <p className="text-xs text-slate-400">Account snapshot</p>
-                  <p className="text-lg font-semibold">{user.name}</p>
-                  <p className="text-xs text-slate-500">{user.email}</p>
+                  <p className="text-sm text-slate-400">Account snapshot</p>
+                  <p className="text-xl font-semibold">{user.name}</p>
+                  <p className="text-sm text-slate-500">{user.email}</p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowOverview(false)}
-                  className="pill px-3 py-1 text-xs font-semibold text-slate-100"
+                  onClick={() => {
+                    setClosing(true);
+                    setTimeout(() => {
+                      setShowOverview(false);
+                      setClosing(false);
+                      setActivityExpanded(false);
+                    }, 220);
+                  }}
+                  className="pill px-4 py-2 text-sm font-semibold text-slate-100"
                 >
                   Close
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-slate-300">Cards</p>
+                    <p className="text-base text-slate-200">Cards</p>
                     <Users className="h-5 w-5 text-sky-300" />
                   </div>
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-4 space-y-3">
                     {cards.length ? (
-                    cards.map((card) => (
-                      <div key={card.id} className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-slate-100">{card.name}</p>
+                      <>
+                        {cards.map((card) => (
+                          <div key={card.id} className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold text-slate-100 text-lg">{card.name}</p>
+                            </div>
+                            <p className="text-base text-slate-100">€{formatEuro(card.balance ?? 0)}</p>
                           </div>
-                          {card.balance != null && (
-                            <p className="text-sm text-slate-100">
-                              €{formatEuro(card.balance)}
-                            </p>
-                          )}
+                        ))}
+                        <div className="flex items-center justify-between pt-3 border-t border-white/10">
+                          <p className="text-base text-slate-200">Total balance</p>
+                          <p className="font-semibold text-slate-100 text-lg">
+                            €{formatEuro(cards.reduce((sum, c) => sum + (c.balance ?? 0), 0))}
+                          </p>
                         </div>
-                      ))
+                      </>
                     ) : (
                       <p className="text-sm text-slate-400">No cards available.</p>
                     )}
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+                <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-slate-300">All activity</p>
+                    <p className="text-base text-slate-200">All activity</p>
                     <ShieldCheck className="h-5 w-5 text-amber-300" />
                   </div>
-                  <div className="mt-3 space-y-2 max-h-52 overflow-y-auto pr-1">
-                    {transactions.length ? (
-                    transactions.map((tx) => (
-                      <div key={tx.id} className="flex items-center justify-between">
+                  <div className="mt-4 flex items-center gap-3 text-sm overflow-x-auto scroll-accent whitespace-nowrap">
+                    {(["all", "7d", "30d"] as const).map((range) => (
+                      <button
+                        key={range}
+                        onClick={() => setTxRange(range)}
+                        className={`pill px-3.5 py-2 capitalize ${txRange === range ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10"}`}
+                      >
+                        {range === "all" ? "All time" : range === "7d" ? "Last 7d" : "Last 30d"}
+                      </button>
+                    ))}
+                    <input
+                      value={txQuery}
+                      onChange={(e) => setTxQuery(e.target.value)}
+                      placeholder="Search name, category, amount"
+                      className="w-56 sm:w-72 rounded-2xl bg-white/5 border border-white/10 px-3.5 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/60"
+                    />
+                  </div>
+                  <div className="mt-4 space-y-3 max-h-[360px] overflow-y-auto pr-3 scroll-accent">
+                    {(() => {
+                      const filtered = filterTransactionsModal(transactions, txRange, txQuery);
+                      const visible = activityExpanded ? filtered : filtered.slice(0, 8);
+                      return filtered.length ? (
+                        <>
+                          {visible.map((tx) => (
+                            <div key={tx.id} className="flex items-center justify-between">
+                              <div>
+                                <p className="font-semibold text-slate-100 text-base">{tx.title}</p>
+                                <p className="text-xs text-slate-400">
+                                  {tx.category ? `${tx.category} • ` : ""}{formatShortDate(tx.date)}
+                                </p>
+                              </div>
+                              <span className={`font-semibold text-base ${tx.type === "credit" ? "text-lime-300" : "text-rose-300"}`}>
+                                {tx.type === "credit" ? "+" : "-"}€{formatEuro(tx.amount)}
+                              </span>
+                            </div>
+                          ))}
+                          {filtered.length > visible.length && (
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setActivityExpanded(true)}
+                                className="pill px-3 py-1.5 text-xs font-semibold text-slate-100"
+                              >
+                                Show all ({filtered.length})
+                              </button>
+                            </div>
+                          )}
+                          {activityExpanded && filtered.length > 8 && (
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setActivityExpanded(false)}
+                                className="pill px-3 py-1.5 text-xs font-semibold text-slate-100"
+                              >
+                                Collapse
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-sm text-slate-400">No recent activity yet.</p>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-2xl bg-white/5 border border-white/10 p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-base text-slate-200">User tickets</p>
+                  <Ticket className="h-5 w-5 text-sky-300" />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  {(["all", "open", "pending", "closed"] as const).map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setModalTicketStatus(status)}
+                      className={`pill px-3 py-2 capitalize ${modalTicketStatus === status ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10"}`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-4 space-y-3">
+                  {filterTickets(tickets, modalTicketStatus).length ? (
+                    filterTickets(tickets, modalTicketStatus).map((ticket) => (
+                      <div
+                        key={ticket.id}
+                        className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3.5 py-3"
+                      >
                         <div>
-                          <p className="font-semibold text-slate-100">{tx.title}</p>
+                          <p className="font-semibold text-slate-100">{ticket.subject}</p>
                           <p className="text-xs text-slate-400">
-                            {tx.category ? `${tx.category} • ` : ""}{formatShortDate(tx.date)}
+                            {ticket.status.toUpperCase()} • Updated {formatRelative(ticket.updatedAt)}
                           </p>
                         </div>
-                        <span className={`font-semibold ${tx.type === "credit" ? "text-lime-300" : "text-rose-300"}`}>
-                          {tx.type === "credit" ? "+" : "-"}€{formatEuro(tx.amount)}
+                        <span
+                          className={`text-xs font-semibold px-2 py-1 rounded-full border ${
+                            ticket.status === "open"
+                              ? "text-lime-300 border-lime-500/40"
+                              : ticket.status === "pending"
+                              ? "text-amber-300 border-amber-400/40"
+                              : "text-slate-300 border-slate-400/30"
+                          }`}
+                        >
+                          {ticket.status}
                         </span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-slate-400">No recent activity yet.</p>
-                    )}
-                  </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-400">No tickets submitted.</p>
+                  )}
                 </div>
               </div>
 
@@ -344,4 +471,21 @@ function formatEuro(amount: number) {
   const useConversion = new Date() < euroCutover;
   const value = useConversion ? amount / bgnToEur : amount;
   return Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function filterTransactionsModal(txs: TransactionItem[], range: "all" | "7d" | "30d", query: string) {
+  const now = new Date();
+  const lower = query.trim().toLowerCase();
+  return txs.filter((tx) => {
+    const txDate = new Date(tx.date);
+    if (!isNaN(txDate.getTime())) {
+      if (range === "7d" && now.getTime() - txDate.getTime() > 7 * 24 * 60 * 60 * 1000) return false;
+      if (range === "30d" && now.getTime() - txDate.getTime() > 30 * 24 * 60 * 60 * 1000) return false;
+    }
+    if (lower) {
+      const haystack = `${tx.title} ${tx.category ?? ""} ${tx.amount}`.toLowerCase();
+      if (!haystack.includes(lower)) return false;
+    }
+    return true;
+  });
 }

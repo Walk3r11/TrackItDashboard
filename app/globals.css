@@ -56,6 +56,26 @@ a {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.scroll-accent {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.5) rgba(255, 255, 255, 0.05);
+}
+.scroll-accent::-webkit-scrollbar {
+  width: 10px;
+}
+.scroll-accent::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+.scroll-accent::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.6), rgba(14, 165, 233, 0.5));
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.06);
+}
+.scroll-accent::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.8), rgba(14, 165, 233, 0.7));
+}
+
 .grid-overlay {
   position: fixed;
   inset: 0;
@@ -96,6 +116,9 @@ a {
   z-index: 40;
   animation: fadeIn 0.35s ease forwards;
 }
+.backdrop.closing {
+  animation: fadeOut 0.22s ease forwards;
+}
 
 .alert-card {
   width: min(900px, 95vw);
@@ -105,6 +128,10 @@ a {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 0 40px rgba(120, 200, 255, 0.18);
   padding: 20px;
   animation: slideUp 0.4s ease forwards;
+}
+.alert-card.closing {
+  animation: slideDown 0.22s ease forwards;
+  opacity: 0;
 }
 
 input,
@@ -133,5 +160,25 @@ button:active {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
