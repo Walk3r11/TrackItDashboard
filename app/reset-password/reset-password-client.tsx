@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ShieldCheck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
 type FormState = "idle" | "loading" | "success" | "error";
@@ -20,8 +21,12 @@ export default function ResetPasswordClient() {
   const initialToken = useMemo(() => searchParams.get("token") ?? "", [searchParams]);
 
   useEffect(() => {
-    if (initialEmail) setEmail(initialEmail);
-    if (initialToken) setToken(initialToken);
+    if (initialEmail) {
+      setEmail(initialEmail);
+    }
+    if (initialToken) {
+      setToken(initialToken);
+    }
   }, [initialEmail, initialToken]);
 
   async function handleSubmit(event: React.FormEvent) {
@@ -30,12 +35,16 @@ export default function ResetPasswordClient() {
 
     if (!email || !token || !password) {
       setState("error");
-      setMessage("Fill in email, token, and new password.");
+      setMessage("Open the reset link from your email to continue.");
       return;
     }
-    if (password.length < 8) {
+    const hasUpper = /[A-Z]/.test(password);
+    const hasLower = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+    if (password.length < 8 || !hasUpper || !hasLower || !hasNumber || !hasSpecial) {
       setState("error");
-      setMessage("Password must be at least 8 characters.");
+      setMessage("Password must be 8+ chars with upper, lower, number, and special.");
       return;
     }
     if (password != confirm) {
@@ -72,91 +81,73 @@ export default function ResetPasswordClient() {
   }
 
   return (
-    <div className="relative min-h-screen px-6 py-16 flex items-center justify-center">
+    <main className="relative overflow-hidden min-h-screen">
       <div className="grid-overlay" />
-      <div className="relative z-10 w-full max-w-lg rounded-[28px] card-surface p-8 md:p-10 fade-in slide-up">
-        <div className="flex items-center gap-3 text-xs uppercase tracking-[0.3em] text-sky-200/70">
-          <span className="pill px-3 py-1">TrackIt</span>
-          <span className="pill px-3 py-1">Reset</span>
-        </div>
-        <h1 className="mt-5 text-3xl md:text-4xl font-semibold text-white">Reset your password</h1>
-        <p className="mt-3 text-sm text-slate-300">
-          Paste the reset token from your email and choose a new password for your account.
-        </p>
-
-        <form onSubmit={handleSubmit} className="mt-8 grid gap-4">
-          <label className="grid gap-2 text-sm text-slate-200">
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="h-12 rounded-2xl border border-white/10 bg-slate-950/40 px-4 text-white placeholder:text-slate-500 focus:border-sky-400/60 focus:outline-none"
-              placeholder="you@trackitco.com"
-              autoComplete="email"
-            />
-          </label>
-
-          <label className="grid gap-2 text-sm text-slate-200">
-            Reset token
-            <input
-              type="text"
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-              className="h-12 rounded-2xl border border-white/10 bg-slate-950/40 px-4 text-white placeholder:text-slate-500 focus:border-sky-400/60 focus:outline-none"
-              placeholder="Paste token"
-            />
-          </label>
-
-          <label className="grid gap-2 text-sm text-slate-200">
-            New password
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="h-12 rounded-2xl border border-white/10 bg-slate-950/40 px-4 text-white placeholder:text-slate-500 focus:border-sky-400/60 focus:outline-none"
-              placeholder="At least 8 characters"
-              autoComplete="new-password"
-            />
-          </label>
-
-          <label className="grid gap-2 text-sm text-slate-200">
-            Confirm password
-            <input
-              type="password"
-              value={confirm}
-              onChange={(event) => setConfirm(event.target.value)}
-              className="h-12 rounded-2xl border border-white/10 bg-slate-950/40 px-4 text-white placeholder:text-slate-500 focus:border-sky-400/60 focus:outline-none"
-              placeholder="Repeat password"
-              autoComplete="new-password"
-            />
-          </label>
-
-          <button
-            type="submit"
-            disabled={state == "loading"}
-            className="mt-2 h-12 rounded-2xl bg-gradient-to-r from-sky-400 via-cyan-400 to-teal-300 text-slate-950 font-semibold tracking-wide shadow-[0_12px_30px_rgba(56,189,248,0.3)]"
-          >
-            {state == "loading" ? "Updating..." : "Update password"}
-          </button>
-        </form>
-
-        {message ? (
-          <div
-            className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
-              state == "success"
-                ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
-                : "border-rose-400/40 bg-rose-500/10 text-rose-100"
-            }`}
-          >
-            {message}
+      <div className="max-w-3xl mx-auto px-6 py-12 relative z-10 fade-in">
+        <header className="space-y-4 slide-up">
+          <div className="pill inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-200 glow-hover">
+            <ShieldCheck className="h-4 w-4 text-lime-300" />
+            Account recovery
           </div>
-        ) : null}
+          <h1 className="text-4xl md:text-5xl font-semibold font-display tracking-tight">Reset your password</h1>
+          <p className="text-sm text-slate-300 max-w-2xl">
+            Paste the reset token from your email and choose a new password for your account.
+          </p>
+        </header>
 
-        <p className="mt-6 text-xs text-slate-400">
-          After resetting, return to the app and log in with your new password.
-        </p>
+        <section className="mt-10 card-surface rounded-3xl p-6 md:p-8 slide-up">
+          <form onSubmit={handleSubmit} className="grid gap-4">
+
+            <label className="grid gap-2 text-sm text-slate-200">
+              New password
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="h-12 rounded-2xl border border-white/15 bg-white/5 px-4 text-sm outline-none focus:border-cyan-300/60 focus:bg-white/10"
+                placeholder="At least 8 characters"
+                autoComplete="new-password"
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm text-slate-200">
+              Confirm password
+              <input
+                type="password"
+                value={confirm}
+                onChange={(event) => setConfirm(event.target.value)}
+                className="h-12 rounded-2xl border border-white/15 bg-white/5 px-4 text-sm outline-none focus:border-cyan-300/60 focus:bg-white/10"
+                placeholder="Repeat password"
+                autoComplete="new-password"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={state == "loading"}
+              className="mt-2 h-12 rounded-2xl bg-gradient-to-r from-cyan-300 to-sky-400 text-slate-900 font-semibold px-4 text-sm shadow-lg shadow-cyan-500/30 disabled:opacity-60 glow-hover"
+            >
+              {state == "loading" ? "Updating..." : "Update password"}
+            </button>
+          </form>
+
+          {message ? (
+            <div
+              className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
+                state == "success"
+                  ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+                  : "border-rose-400/40 bg-rose-500/10 text-rose-100"
+              }`}
+            >
+              {message}
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-400">
+            <span className="pill px-3 py-1">Back in the app, log in with the new password.</span>
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
