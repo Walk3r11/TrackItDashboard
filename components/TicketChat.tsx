@@ -33,14 +33,14 @@ export default function TicketChat({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     loadMessages();
-    startPolling();
+    startSSE();
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
       }
     };
   }, [ticketId]);
@@ -70,35 +70,51 @@ export default function TicketChat({
     }
   }
 
-  function startPolling() {
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
+  function startSSE() {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
     }
 
-    pollIntervalRef.current = setInterval(async () => {
+    const token = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("auth-token="))
+      ?.split("=")[1];
+
+    const url = `${apiBase}/api/tickets/${ticketId}/messages/stream?supportUserId=${userId}`;
+    const eventSource = new EventSource(url, {
+      withCredentials: true,
+    });
+
+    eventSource.onmessage = (event) => {
       try {
-        const res = await fetch(
-          `${apiBase}/api/tickets/${ticketId}/messages?supportUserId=${userId}`,
-          {
-            cache: "no-store",
-          }
-        );
-        if (res.ok) {
-          const body = await res.json();
-          const newMessages = body.messages ?? [];
+        const data = JSON.parse(event.data);
+        if (data.type === "message" && data.message) {
           setMessages((prev) => {
-            if (newMessages.length !== prev.length) {
-              return newMessages;
-            }
-            const prevIds = new Set(prev.map((m) => m.id));
-            const hasNew = newMessages.some((m: Message) => !prevIds.has(m.id));
-            return hasNew ? newMessages : prev;
+            const exists = prev.some((m) => m.id === data.message.id);
+            if (exists) return prev;
+            return [...prev, data.message];
           });
+        } else if (data.type === "connected") {
+          console.log("SSE connected for ticket messages");
+        } else if (data.type === "error") {
+          console.error("SSE error:", data.error);
         }
       } catch (err) {
-        console.error("Error polling messages:", err);
+        console.error("Error parsing SSE message:", err);
       }
-    }, 2000); // Poll every 2 seconds
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("SSE connection error:", err);
+      eventSource.close();
+      setTimeout(() => {
+        if (eventSourceRef.current === eventSource) {
+          startSSE();
+        }
+      }, 3000);
+    };
+
+    eventSourceRef.current = eventSource;
   }
 
   async function sendMessage() {
