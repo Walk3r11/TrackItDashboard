@@ -127,15 +127,20 @@ export default function Page() {
       .find((row) => row.startsWith("auth-token="))
       ?.split("=")[1];
 
-    const url = `${apiBase}/api/transactions/stream?userId=${encodeURIComponent(userId)}`;
+    const url = `${apiBase}/api/transactions/stream?userId=${encodeURIComponent(userId)}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
     const eventSource = new EventSource(url, {
       withCredentials: true,
     });
+
+    eventSource.onopen = () => {
+      console.log("Transaction SSE stream opened");
+    };
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "transaction" && data.transaction) {
+          console.log("New transaction received:", data.transaction);
           setTransactions((prev) => {
             const exists = prev.some((t) => t.id === data.transaction.id);
             if (exists) return prev;
@@ -152,13 +157,16 @@ export default function Page() {
     };
 
     eventSource.onerror = (err) => {
-      console.error("SSE connection error:", err);
-      eventSource.close();
-      setTimeout(() => {
-        if (transactionEventSourceRef.current === eventSource && user) {
-          startTransactionStream(user.id);
-        }
-      }, 3000);
+      console.error("SSE connection error:", err, eventSource.readyState);
+      if (eventSource.readyState === EventSource.CLOSED) {
+        eventSource.close();
+        setTimeout(() => {
+          if (transactionEventSourceRef.current === eventSource && user) {
+            console.log("Reconnecting transaction stream...");
+            startTransactionStream(user.id);
+          }
+        }, 3000);
+      }
     };
 
     transactionEventSourceRef.current = eventSource;
