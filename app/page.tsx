@@ -1,7 +1,7 @@
 "use client";
 
 import { ShieldCheck, Ticket, Users, Zap, LogOut, Bot } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import TicketChat from "@/components/TicketChat";
 import GroqQuery from "@/components/GroqQuery";
@@ -61,6 +61,7 @@ export default function Page() {
   const [supportUser, setSupportUser] = useState<{ email: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "groq">("overview");
+  const transactionEventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -103,16 +104,78 @@ export default function Page() {
       await loadTransactions(body.user.id);
       await loadCards(body.user.id);
       setActiveTab("overview");
+      startTransactionStream(body.user.id);
     } catch (err) {
       setError("Unable to load that user. Verify the query and API endpoint.");
       setUser(null);
       setTickets([]);
       setTransactions([]);
       setCards([]);
+      stopTransactionStream();
     } finally {
       setLoading(false);
     }
   }
+
+  function startTransactionStream(userId: string) {
+    if (transactionEventSourceRef.current) {
+      transactionEventSourceRef.current.close();
+    }
+
+    const token = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("auth-token="))
+      ?.split("=")[1];
+
+    const url = `${apiBase}/api/transactions/stream?userId=${encodeURIComponent(userId)}`;
+    const eventSource = new EventSource(url, {
+      withCredentials: true,
+    });
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "transaction" && data.transaction) {
+          setTransactions((prev) => {
+            const exists = prev.some((t) => t.id === data.transaction.id);
+            if (exists) return prev;
+            return [data.transaction, ...prev];
+          });
+        } else if (data.type === "connected") {
+          console.log("SSE connected for transactions");
+        } else if (data.type === "error") {
+          console.error("SSE error:", data.error);
+        }
+      } catch (err) {
+        console.error("Error parsing SSE transaction:", err);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("SSE connection error:", err);
+      eventSource.close();
+      setTimeout(() => {
+        if (transactionEventSourceRef.current === eventSource && user) {
+          startTransactionStream(user.id);
+        }
+      }, 3000);
+    };
+
+    transactionEventSourceRef.current = eventSource;
+  }
+
+  function stopTransactionStream() {
+    if (transactionEventSourceRef.current) {
+      transactionEventSourceRef.current.close();
+      transactionEventSourceRef.current = null;
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      stopTransactionStream();
+    };
+  }, []);
 
   async function loadTickets(userId: string) {
     try {

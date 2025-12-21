@@ -75,11 +75,6 @@ export default function TicketChat({
       eventSourceRef.current.close();
     }
 
-    const token = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("auth-token="))
-      ?.split("=")[1];
-
     const url = `${apiBase}/api/tickets/${ticketId}/messages/stream?supportUserId=${userId}`;
     const eventSource = new EventSource(url, {
       withCredentials: true,
