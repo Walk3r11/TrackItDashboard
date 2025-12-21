@@ -30,10 +30,15 @@ export default function LoginClient() {
         })
       });
 
+      const data = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
         const errorMessage = data.error || "Invalid email or password";
         throw new Error(errorMessage);
+      }
+
+      if (data.token) {
+        document.cookie = `auth-token=${data.token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax; Secure`;
       }
 
       router.push("/");

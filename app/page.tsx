@@ -96,6 +96,7 @@ export default function Page() {
       method: "POST",
       credentials: "include",
     });
+    document.cookie = "auth-token=; path=/; max-age=0";
     router.push("/login");
     router.refresh();
   }

@@ -97,7 +97,6 @@ export default function ResetPasswordClient() {
 
         <section className="mt-10 card-surface rounded-3xl p-6 md:p-8 slide-up">
           <form onSubmit={handleSubmit} className="grid gap-4">
-
             <label className="grid gap-2 text-sm text-slate-200">
               New password
               <input
