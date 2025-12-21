@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Send } from "lucide-react";
 
 type Message = {
@@ -35,21 +35,7 @@ export default function TicketChat({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  useEffect(() => {
-    loadMessages();
-    startSSE();
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-    };
-  }, [ticketId]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  async function loadMessages() {
+  const loadMessages = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -68,9 +54,9 @@ export default function TicketChat({
     } finally {
       setLoading(false);
     }
-  }
+  }, [apiBase, ticketId, userId]);
 
-  function startSSE() {
+  const startSSE = useCallback(() => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
@@ -110,7 +96,21 @@ export default function TicketChat({
     };
 
     eventSourceRef.current = eventSource;
-  }
+  }, [apiBase, ticketId, userId]);
+
+  useEffect(() => {
+    loadMessages();
+    startSSE();
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, [loadMessages, startSSE]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   async function sendMessage() {
     const text = inputText.trim();

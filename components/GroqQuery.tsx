@@ -90,7 +90,7 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
                 Ask Groq about user data
               </p>
               <p className="text-sm text-slate-400 mt-2">
-                Ask questions about the user's transactions, spending patterns, categories, and financial data.
+                Ask questions about the user&apos;s transactions, spending patterns, categories, and financial data.
               </p>
             </div>
           </div>
