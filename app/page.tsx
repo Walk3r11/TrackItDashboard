@@ -61,14 +61,24 @@ export default function Page() {
   const [supportUser, setSupportUser] = useState<{ email: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "groq">("overview");
+  const [newTransactionCount, setNewTransactionCount] = useState(0);
+  const [isTabTransitioning, setIsTabTransitioning] = useState(false);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const transactionEventSourceRef = useRef<EventSource | null>(null);
+  const ticketEventSourceRef = useRef<EventSource | null>(null);
+  const userSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/auth/session")
+    fetch(`${apiBase}/api/auth/dashboard/session`, {
+      credentials: "include",
+    })
       .then((res) => res.json())
       .then((data) => {
         if (data.authenticated) {
           setSupportUser({ email: data.user.email });
+          if (data.token) {
+            setAuthToken(data.token);
+          }
         } else {
           router.push("/login");
         }
@@ -82,7 +92,10 @@ export default function Page() {
   }, [router]);
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch(`${apiBase}/api/auth/dashboard/logout`, { 
+      method: "POST",
+      credentials: "include",
+    });
     router.push("/login");
     router.refresh();
   }
@@ -96,22 +109,37 @@ export default function Page() {
       const base = apiBase;
       const lookupUrl = `${base}/api/users/lookup?query=${encodeURIComponent(query.trim())}`;
       const res = await fetch(lookupUrl, { cache: "no-store" });
-      if (!res.ok) throw new Error("Request failed");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "User not found");
+      }
       const body = await res.json();
-      if (!body.user) throw new Error("User not found");
+      if (!body.user) {
+        throw new Error("User not found. Please check the email or ID and try again.");
+      }
       setUser(body.user);
       await loadTickets(body.user.id);
       await loadTransactions(body.user.id);
       await loadCards(body.user.id);
       setActiveTab("overview");
+      setNewTransactionCount(0);
       startTransactionStream(body.user.id);
+      startTicketStream(body.user.id);
+      
+      setTimeout(() => {
+        if (userSectionRef.current) {
+          userSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
     } catch (err) {
-      setError("Unable to load that user. Verify the query and API endpoint.");
+      const errorMessage = err instanceof Error ? err.message : "User not found. Please check the email or ID and try again.";
+      setError(errorMessage);
       setUser(null);
       setTickets([]);
       setTransactions([]);
       setCards([]);
       stopTransactionStream();
+      stopTicketStream();
     } finally {
       setLoading(false);
     }
@@ -122,42 +150,31 @@ export default function Page() {
       transactionEventSourceRef.current.close();
     }
 
-    const url = `/api/transactions/stream?userId=${encodeURIComponent(userId)}`;
+    const url = `${apiBase}/api/transactions/stream?userId=${encodeURIComponent(userId)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
     const eventSource = new EventSource(url, {
       withCredentials: true,
     });
-
-    eventSource.onopen = () => {
-      console.log("Transaction SSE stream opened");
-    };
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "transaction" && data.transaction) {
-          console.log("New transaction received:", data.transaction);
           setTransactions((prev) => {
             const exists = prev.some((t) => t.id === data.transaction.id);
             if (exists) return prev;
+            setNewTransactionCount((count) => count + 1);
             return [data.transaction, ...prev];
           });
-        } else if (data.type === "connected") {
-          console.log("SSE connected for transactions");
-        } else if (data.type === "error") {
-          console.error("SSE error:", data.error);
         }
       } catch (err) {
-        console.error("Error parsing SSE transaction:", err);
       }
     };
 
     eventSource.onerror = (err) => {
-      console.error("SSE connection error:", err, eventSource.readyState);
       if (eventSource.readyState === EventSource.CLOSED) {
         eventSource.close();
         setTimeout(() => {
           if (transactionEventSourceRef.current === eventSource && user) {
-            console.log("Reconnecting transaction stream...");
             startTransactionStream(user.id);
           }
         }, 3000);
@@ -174,9 +191,55 @@ export default function Page() {
     }
   }
 
+  function startTicketStream(userId: string) {
+    if (ticketEventSourceRef.current) {
+      ticketEventSourceRef.current.close();
+    }
+
+    const url = `${apiBase}/api/tickets/stream?userId=${encodeURIComponent(userId)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
+    const eventSource = new EventSource(url, {
+      withCredentials: true,
+    });
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "ticket" && data.ticket) {
+          setTickets((prev) => {
+            const exists = prev.some((t) => t.id === data.ticket.id);
+            if (exists) return prev;
+            return [data.ticket, ...prev];
+          });
+        }
+      } catch (err) {
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      if (eventSource.readyState === EventSource.CLOSED) {
+        eventSource.close();
+        setTimeout(() => {
+          if (ticketEventSourceRef.current === eventSource && user) {
+            startTicketStream(user.id);
+          }
+        }, 3000);
+      }
+    };
+
+    ticketEventSourceRef.current = eventSource;
+  }
+
+  function stopTicketStream() {
+    if (ticketEventSourceRef.current) {
+      ticketEventSourceRef.current.close();
+      ticketEventSourceRef.current = null;
+    }
+  }
+
   useEffect(() => {
     return () => {
       stopTransactionStream();
+      stopTicketStream();
     };
   }, []);
 
@@ -185,9 +248,13 @@ export default function Page() {
       const base = apiBase;
       const url = `${base}/api/tickets?userId=${encodeURIComponent(userId)}`;
       const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error("Tickets request failed");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to load tickets");
+      }
       const body = await res.json();
-      setTickets(body.tickets ?? []);
+      const ticketsList = body.tickets ?? [];
+      setTickets(ticketsList);
     } catch (err) {
       setTickets([]);
     }
@@ -255,21 +322,10 @@ export default function Page() {
       <div className="grid-overlay" />
       <div className="max-w-6xl mx-auto px-6 py-10 space-y-10 relative z-10 fade-in">
         <header className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between slide-up">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="pill inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-200 glow-hover">
-                <Zap className="h-4 w-4 text-lime-300" />
-                Finance cockpit for TrackIt app
-              </div>
-              {supportUser && (
-                <button
-                  onClick={handleLogout}
-                  className="pill inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition-colors"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Logout
-                </button>
-              )}
+          <div className="space-y-4 flex-1">
+            <div className="pill inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-200 glow-hover">
+              <Zap className="h-4 w-4 text-lime-300" />
+              Finance cockpit for TrackIt app
             </div>
             <div className="space-y-2">
               <h1 className="text-4xl md:text-5xl font-semibold font-display tracking-tight">
@@ -282,6 +338,17 @@ export default function Page() {
               <span className="pill px-3 py-1">Tracker</span>
             </div>
           </div>
+          {supportUser && (
+            <div className="flex items-start">
+              <button
+                onClick={handleLogout}
+                className="pill inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </button>
+            </div>
+          )}
         </header>
 
         <section className="card-surface rounded-3xl p-6 slide-up">
@@ -312,7 +379,7 @@ export default function Page() {
         </section>
 
         {user && (
-          <section className="card-surface rounded-3xl p-6 slide-up">
+          <section ref={userSectionRef} className="card-surface rounded-3xl p-6 slide-up">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <p className="text-sm text-slate-400">User data</p>
@@ -323,8 +390,15 @@ export default function Page() {
             {/* Tabs */}
             <div className="flex gap-2 mb-6 border-b border-white/10">
               <button
-                onClick={() => setActiveTab("overview")}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                onClick={() => {
+                  setIsTabTransitioning(true);
+                  setTimeout(() => {
+                    setActiveTab("overview");
+                    setNewTransactionCount(0);
+                    setIsTabTransitioning(false);
+                  }, 150);
+                }}
+                className={`px-4 py-2 text-sm font-medium transition-all duration-300 ${
                   activeTab === "overview"
                     ? "text-cyan-300 border-b-2 border-cyan-300"
                     : "text-slate-400 hover:text-slate-200"
@@ -333,8 +407,14 @@ export default function Page() {
                 Overview
               </button>
               <button
-                onClick={() => setActiveTab("tickets")}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                onClick={() => {
+                  setIsTabTransitioning(true);
+                  setTimeout(() => {
+                    setActiveTab("tickets");
+                    setIsTabTransitioning(false);
+                  }, 150);
+                }}
+                className={`px-4 py-2 text-sm font-medium transition-all duration-300 ${
                   activeTab === "tickets"
                     ? "text-cyan-300 border-b-2 border-cyan-300"
                     : "text-slate-400 hover:text-slate-200"
@@ -346,8 +426,14 @@ export default function Page() {
                 </span>
               </button>
               <button
-                onClick={() => setActiveTab("groq")}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                onClick={() => {
+                  setIsTabTransitioning(true);
+                  setTimeout(() => {
+                    setActiveTab("groq");
+                    setIsTabTransitioning(false);
+                  }, 150);
+                }}
+                className={`px-4 py-2 text-sm font-medium transition-all duration-300 ${
                   activeTab === "groq"
                     ? "text-cyan-300 border-b-2 border-cyan-300"
                     : "text-slate-400 hover:text-slate-200"
@@ -362,7 +448,7 @@ export default function Page() {
 
             {/* Tab Content */}
             {activeTab === "overview" && (
-              <div className="space-y-4">
+              <div className={`space-y-4 transition-opacity duration-300 ${isTabTransitioning ? "opacity-0" : "opacity-100"}`}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
                     <div className="flex items-center justify-between">
@@ -395,7 +481,14 @@ export default function Page() {
 
                   <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
                     <div className="flex items-center justify-between">
-                      <p className="text-base text-slate-200">Recent Transactions</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-base text-slate-200">Recent Transactions</p>
+                        {newTransactionCount > 0 && (
+                          <span className="px-2 py-0.5 text-xs font-semibold bg-cyan-400 text-slate-900 rounded-full animate-pulse">
+                            {newTransactionCount} new
+                          </span>
+                        )}
+                      </div>
                       <ShieldCheck className="h-5 w-5 text-amber-300" />
                     </div>
                     <div className="mt-4 space-y-3 max-h-[300px] overflow-y-auto pr-3 scroll-accent">
@@ -423,7 +516,7 @@ export default function Page() {
             )}
 
             {activeTab === "tickets" && (
-              <div>
+              <div className={`transition-opacity duration-300 ${isTabTransitioning ? "opacity-0" : "opacity-100"}`}>
                 <div className="flex flex-wrap gap-2 text-sm mb-4">
                   {(["all", "open", "pending", "closed"] as const).map((status) => (
                     <button
@@ -464,7 +557,7 @@ export default function Page() {
             )}
 
             {activeTab === "groq" && (
-              <div className="h-[600px]">
+              <div className={`h-[600px] transition-opacity duration-300 ${isTabTransitioning ? "opacity-0" : "opacity-100"}`}>
                 <GroqQuery userId={user.id} apiBase={apiBase} />
               </div>
             )}

@@ -19,9 +19,11 @@ export default function LoginClient() {
     setState("loading");
 
     try {
-      const response = await fetch("/api/auth/login", {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "https://trackit-dashboard-beryl.vercel.app";
+      const response = await fetch(`${apiBase}/api/auth/dashboard/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           password: password
@@ -29,8 +31,9 @@ export default function LoginClient() {
       });
 
       if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        throw new Error(text || "Login failed");
+        const data = await response.json().catch(() => ({}));
+        const errorMessage = data.error || "Invalid email or password";
+        throw new Error(errorMessage);
       }
 
       router.push("/");

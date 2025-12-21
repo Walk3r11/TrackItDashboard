@@ -50,7 +50,6 @@ export default function TicketChat({
       setMessages(body.messages ?? []);
     } catch (err) {
       setError("Failed to load messages");
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -80,18 +79,13 @@ export default function TicketChat({
             if (exists) return prev;
             return [...prev, data.message];
           });
-        } else if (data.type === "connected") {
-          console.log("SSE connected for ticket messages");
         } else if (data.type === "error") {
-          console.error("SSE error:", data.error);
         }
       } catch (err) {
-        console.error("Error parsing SSE message:", err);
       }
     };
 
     eventSource.onerror = (err) => {
-      console.error("SSE connection error:", err);
       eventSource.close();
       setTimeout(() => {
         if (eventSourceRef.current === eventSource) {
