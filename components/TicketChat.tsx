@@ -128,7 +128,7 @@ export default function TicketChat({
           },
           body: JSON.stringify({
             content: text,
-            senderType: "support", // Dashboard is always support
+            senderType: "support",
           }),
         }
       );
@@ -168,7 +168,6 @@ export default function TicketChat({
         onClick={onClose}
       />
       <div className="relative w-full max-w-2xl h-[80vh] flex flex-col bg-slate-900/95 border border-white/10 rounded-3xl shadow-2xl">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/10">
           <div>
             <h2 className="text-xl font-semibold text-slate-100">
@@ -184,7 +183,6 @@ export default function TicketChat({
           </button>
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 scroll-accent">
           {loading ? (
             <div className="text-center text-slate-400 py-8">Loading messages...</div>
@@ -224,14 +222,12 @@ export default function TicketChat({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Error */}
         {error && (
           <div className="px-6 py-2 bg-rose-500/20 border-t border-rose-500/30">
             <p className="text-sm text-rose-300">{error}</p>
           </div>
         )}
 
-        {/* Input */}
         <div className="p-6 border-t border-white/10">
           <div className="flex gap-3">
             <input
