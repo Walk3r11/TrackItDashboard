@@ -46,8 +46,9 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        credentials: "include",
         body: JSON.stringify({
           messages: [...messages, userMessage],
           model: "llama-4-scout-17b-16e",
