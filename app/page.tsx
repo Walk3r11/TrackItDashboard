@@ -1,7 +1,10 @@
 "use client";
 
-import { ShieldCheck, Ticket, Users, Zap } from "lucide-react";
-import { useState } from "react";
+import { ShieldCheck, Ticket, Users, Zap, LogOut, Bot } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import TicketChat from "@/components/TicketChat";
+import GroqQuery from "@/components/GroqQuery";
 
 type User = {
   id: string;
@@ -41,6 +44,7 @@ const euroCutover = new Date("2026-01-01T00:00:00Z");
 const bgnToEur = 1.95583;
 
 export default function Page() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,12 +53,38 @@ export default function Page() {
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [cards, setCards] = useState<CardItem[]>([]);
   const [ticketStatus, setTicketStatus] = useState<"all" | "open" | "pending" | "closed">("all");
-  const [showOverview, setShowOverview] = useState(false);
   const [txRange, setTxRange] = useState<"all" | "7d" | "30d">("all");
   const [txQuery, setTxQuery] = useState("");
   const [modalTicketStatus, setModalTicketStatus] = useState<"all" | "open" | "pending" | "closed">("all");
   const [activityExpanded, setActivityExpanded] = useState(false);
-  const [closing, setClosing] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<{ id: string; subject: string } | null>(null);
+  const [supportUser, setSupportUser] = useState<{ email: string } | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "groq">("overview");
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated) {
+          setSupportUser({ email: data.user.email });
+        } else {
+          router.push("/login");
+        }
+      })
+      .catch(() => {
+        router.push("/login");
+      })
+      .finally(() => {
+        setAuthLoading(false);
+      });
+  }, [router]);
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
 
   async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,14 +102,13 @@ export default function Page() {
       await loadTickets(body.user.id);
       await loadTransactions(body.user.id);
       await loadCards(body.user.id);
-      setShowOverview(true);
+      setActiveTab("overview");
     } catch (err) {
       setError("Unable to load that user. Verify the query and API endpoint.");
       setUser(null);
       setTickets([]);
       setTransactions([]);
       setCards([]);
-      setShowOverview(false);
     } finally {
       setLoading(false);
     }
@@ -144,15 +173,37 @@ export default function Page() {
     }
   }
 
+  if (authLoading) {
+    return (
+      <main className="relative overflow-hidden min-h-screen">
+        <div className="grid-overlay" />
+        <div className="max-w-6xl mx-auto px-6 py-10 space-y-10 relative z-10 fade-in flex items-center justify-center min-h-screen">
+          <div className="text-slate-300">Loading...</div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="relative overflow-hidden min-h-screen">
       <div className="grid-overlay" />
       <div className="max-w-6xl mx-auto px-6 py-10 space-y-10 relative z-10 fade-in">
         <header className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between slide-up">
           <div className="space-y-4">
-            <div className="pill inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-200 glow-hover">
-              <Zap className="h-4 w-4 text-lime-300" />
-              Finance cockpit for TrackIt app
+            <div className="flex items-center justify-between">
+              <div className="pill inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-200 glow-hover">
+                <Zap className="h-4 w-4 text-lime-300" />
+                Finance cockpit for TrackIt app
+              </div>
+              {supportUser && (
+                <button
+                  onClick={handleLogout}
+                  className="pill inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              )}
             </div>
             <div className="space-y-2">
               <h1 className="text-4xl md:text-5xl font-semibold font-display tracking-tight">
@@ -194,244 +245,224 @@ export default function Page() {
           {!user && !error && <p className="mt-3 text-sm text-slate-400">Start with a user search to load profile and tickets.</p>}
         </section>
 
-        <section className="card-surface rounded-3xl p-6 slide-up">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-400">Support tickets</p>
-              <p className="text-lg font-semibold">User conversations</p>
-            </div>
-            <Ticket className="h-6 w-6 text-lime-300" />
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2 text-sm">
-            {(["all", "open", "pending", "closed"] as const).map((status) => (
-              <button
-                key={status}
-                onClick={() => setTicketStatus(status)}
-                className={`pill px-3 py-2 capitalize ${ticketStatus === status ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10"
-                  }`}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {filterTickets(tickets, ticketStatus).length ? (
-              filterTickets(tickets, ticketStatus).map((ticket) => (
-                <div
-                  key={ticket.id}
-                  className="rounded-2xl bg-slate/50 border border-white/5 px-4 py-3 flex items-center justify-between"
-                >
-                  <div>
-                    <p className="font-medium">{ticket.subject}</p>
-                    <p className="text-xs text-slate-400">
-                      {ticket.status.toUpperCase()} • Updated {formatRelative(ticket.updatedAt)}
-                    </p>
-                  </div>
-                  <span className="pill px-3 py-1 text-xs capitalize">
-                    {ticket.priority ? `${ticket.priority} • ${ticket.status}` : ticket.status}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="text-sm text-slate-400">No tickets found.</div>
-            )}
-          </div>
-
-          {user && <div className="mt-6" />}
-        </section>
-
-        {showOverview && user && (
-          <div
-            className={`backdrop ${closing ? "closing" : ""}`}
-            onClick={() => {
-              setClosing(true);
-              setTimeout(() => {
-                setShowOverview(false);
-                setClosing(false);
-                setActivityExpanded(false);
-              }, 220);
-            }}
-          >
-            <div
-              className={`alert-card max-w-6xl w-[92vw] ${closing ? "closing" : "slide-up"}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-4 mb-6">
-                <div>
-                  <p className="text-sm text-slate-400">Account snapshot</p>
-                  <p className="text-xl font-semibold">{user.name}</p>
-                  <p className="text-sm text-slate-500">{user.email}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setClosing(true);
-                    setTimeout(() => {
-                      setShowOverview(false);
-                      setClosing(false);
-                      setActivityExpanded(false);
-                    }, 220);
-                  }}
-                  className="pill px-4 py-2 text-sm font-semibold text-slate-100"
-                >
-                  Close
-                </button>
+        {user && (
+          <section className="card-surface rounded-3xl p-6 slide-up">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <p className="text-sm text-slate-400">User data</p>
+                <p className="text-lg font-semibold">{user.name}</p>
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
-                  <div className="flex items-center justify-between">
-                    <p className="text-base text-slate-200">Cards</p>
-                    <Users className="h-5 w-5 text-sky-300" />
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    {cards.length ? (
-                      <>
-                        {cards.map((card) => (
-                          <div key={card.id} className="flex items-center justify-between">
-                            <div>
-                              <p className="font-semibold text-slate-100 text-lg">{card.name}</p>
-                            </div>
-                            <p className="text-base text-slate-100">€{formatEuro(card.balance ?? 0)}</p>
-                          </div>
-                        ))}
-                        <div className="flex items-center justify-between pt-3 border-t border-white/10">
-                          <p className="text-base text-slate-200">Total balance</p>
-                          <p className="font-semibold text-slate-100 text-lg">
-                            €{formatEuro(cards.reduce((sum, c) => sum + (c.balance ?? 0), 0))}
-                          </p>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-sm text-slate-400">No cards available.</p>
-                    )}
-                  </div>
-                </div>
+            {/* Tabs */}
+            <div className="flex gap-2 mb-6 border-b border-white/10">
+              <button
+                onClick={() => setActiveTab("overview")}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "overview"
+                    ? "text-cyan-300 border-b-2 border-cyan-300"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setActiveTab("tickets")}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "tickets"
+                    ? "text-cyan-300 border-b-2 border-cyan-300"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Ticket className="h-4 w-4" />
+                  Tickets
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab("groq")}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "groq"
+                    ? "text-cyan-300 border-b-2 border-cyan-300"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Bot className="h-4 w-4" />
+                  Groq Query
+                </span>
+              </button>
+            </div>
 
-                <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
-                  <div className="flex items-center justify-between">
-                    <p className="text-base text-slate-200">All activity</p>
-                    <ShieldCheck className="h-5 w-5 text-amber-300" />
-                  </div>
-                  <div className="mt-4 flex items-center gap-3 text-sm overflow-x-auto scroll-accent whitespace-nowrap">
-                    {(["all", "7d", "30d"] as const).map((range) => (
-                      <button
-                        key={range}
-                        onClick={() => setTxRange(range)}
-                        className={`pill px-3.5 py-2 capitalize ${txRange === range ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10"}`}
-                      >
-                        {range === "all" ? "All time" : range === "7d" ? "Last 7d" : "Last 30d"}
-                      </button>
-                    ))}
-                    <input
-                      value={txQuery}
-                      onChange={(e) => setTxQuery(e.target.value)}
-                      placeholder="Search name, category, amount"
-                      className="w-56 sm:w-72 rounded-2xl bg-white/5 border border-white/10 px-3.5 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/60"
-                    />
-                  </div>
-                  <div className="mt-4 space-y-3 max-h-[360px] overflow-y-auto pr-3 scroll-accent">
-                    {(() => {
-                      const filtered = filterTransactionsModal(transactions, txRange, txQuery);
-                      const visible = activityExpanded ? filtered : filtered.slice(0, 8);
-                      return filtered.length ? (
+            {/* Tab Content */}
+            {activeTab === "overview" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-base text-slate-200">Cards</p>
+                      <Users className="h-5 w-5 text-sky-300" />
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {cards.length ? (
                         <>
-                          {visible.map((tx) => (
-                            <div key={tx.id} className="flex items-center justify-between">
+                          {cards.map((card) => (
+                            <div key={card.id} className="flex items-center justify-between">
                               <div>
-                                <p className="font-semibold text-slate-100 text-base">{tx.title}</p>
-                                <p className="text-xs text-slate-400">
-                                  {tx.category ? `${tx.category} • ` : ""}{formatShortDate(tx.date)}
-                                </p>
+                                <p className="font-semibold text-slate-100 text-lg">{card.name}</p>
                               </div>
-                              <span className={`font-semibold text-base ${tx.type === "credit" ? "text-lime-300" : "text-rose-300"}`}>
-                                {tx.type === "credit" ? "+" : "-"}€{formatEuro(tx.amount)}
-                              </span>
+                              <p className="text-base text-slate-100">€{formatEuro(card.balance ?? 0)}</p>
                             </div>
                           ))}
-                          {filtered.length > visible.length && (
-                            <div className="pt-1">
-                              <button
-                                type="button"
-                                onClick={() => setActivityExpanded(true)}
-                                className="pill px-3 py-1.5 text-xs font-semibold text-slate-100"
-                              >
-                                Show all ({filtered.length})
-                              </button>
-                            </div>
-                          )}
-                          {activityExpanded && filtered.length > 8 && (
-                            <div className="pt-1">
-                              <button
-                                type="button"
-                                onClick={() => setActivityExpanded(false)}
-                                className="pill px-3 py-1.5 text-xs font-semibold text-slate-100"
-                              >
-                                Collapse
-                              </button>
-                            </div>
-                          )}
+                          <div className="flex items-center justify-between pt-3 border-t border-white/10">
+                            <p className="text-base text-slate-200">Total balance</p>
+                            <p className="font-semibold text-slate-100 text-lg">
+                              €{formatEuro(cards.reduce((sum, c) => sum + (c.balance ?? 0), 0))}
+                            </p>
+                          </div>
                         </>
                       ) : (
-                        <p className="text-sm text-slate-400">No recent activity yet.</p>
-                      );
-                    })()}
+                        <p className="text-sm text-slate-400">No cards available.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-base text-slate-200">Recent Transactions</p>
+                      <ShieldCheck className="h-5 w-5 text-amber-300" />
+                    </div>
+                    <div className="mt-4 space-y-3 max-h-[300px] overflow-y-auto pr-3 scroll-accent">
+                      {transactions.slice(0, 10).length ? (
+                        transactions.slice(0, 10).map((tx) => (
+                          <div key={tx.id} className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold text-slate-100 text-sm">{tx.title}</p>
+                              <p className="text-xs text-slate-400">
+                                {tx.category ? `${tx.category} • ` : ""}{formatShortDate(tx.date)}
+                              </p>
+                            </div>
+                            <span className={`font-semibold text-sm ${tx.type === "credit" ? "text-lime-300" : "text-rose-300"}`}>
+                              {tx.type === "credit" ? "+" : "-"}€{formatEuro(tx.amount)}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-slate-400">No recent transactions.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
+            )}
 
-              <div className="mt-5 rounded-2xl bg-white/5 border border-white/10 p-5">
-                <div className="flex items-center justify-between">
-                  <p className="text-base text-slate-200">User tickets</p>
-                  <Ticket className="h-5 w-5 text-sky-300" />
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            {activeTab === "tickets" && (
+              <div>
+                <div className="flex flex-wrap gap-2 text-sm mb-4">
                   {(["all", "open", "pending", "closed"] as const).map((status) => (
                     <button
                       key={status}
-                      onClick={() => setModalTicketStatus(status)}
-                      className={`pill px-3 py-2 capitalize ${modalTicketStatus === status ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10"}`}
+                      onClick={() => setTicketStatus(status)}
+                      className={`pill px-3 py-2 capitalize ${ticketStatus === status ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10"
+                        }`}
                     >
                       {status}
                     </button>
                   ))}
                 </div>
-                <div className="mt-4 space-y-3">
-                  {filterTickets(tickets, modalTicketStatus).length ? (
-                    filterTickets(tickets, modalTicketStatus).map((ticket) => (
+
+                <div className="space-y-3">
+                  {filterTickets(tickets, ticketStatus).length ? (
+                    filterTickets(tickets, ticketStatus).map((ticket) => (
                       <div
                         key={ticket.id}
-                        className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3.5 py-3"
+                        onClick={() => setSelectedTicket({ id: ticket.id, subject: ticket.subject })}
+                        className="rounded-2xl bg-slate/50 border border-white/5 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
                       >
                         <div>
-                          <p className="font-semibold text-slate-100">{ticket.subject}</p>
+                          <p className="font-medium">{ticket.subject}</p>
                           <p className="text-xs text-slate-400">
                             {ticket.status.toUpperCase()} • Updated {formatRelative(ticket.updatedAt)}
                           </p>
                         </div>
-                        <span
-                          className={`text-xs font-semibold px-2 py-1 rounded-full border ${
-                            ticket.status === "open"
-                              ? "text-lime-300 border-lime-500/40"
-                              : ticket.status === "pending"
-                              ? "text-amber-300 border-amber-400/40"
-                              : "text-slate-300 border-slate-400/30"
-                          }`}
-                        >
-                          {ticket.status}
+                        <span className="pill px-3 py-1 text-xs capitalize">
+                          {ticket.priority ? `${ticket.priority} • ${ticket.status}` : ticket.status}
                         </span>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-slate-400">No tickets submitted.</p>
+                    <div className="text-sm text-slate-400">No tickets found.</div>
                   )}
                 </div>
               </div>
+            )}
 
+            {activeTab === "groq" && (
+              <div className="h-[600px]">
+                <GroqQuery userId={user.id} apiBase={apiBase} />
+              </div>
+            )}
+          </section>
+        )}
+
+        {!user && (
+          <section className="card-surface rounded-3xl p-6 slide-up">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-400">Support tickets</p>
+                <p className="text-lg font-semibold">User conversations</p>
+              </div>
+              <Ticket className="h-6 w-6 text-lime-300" />
             </div>
-          </div>
+
+            <div className="mt-4 flex flex-wrap gap-2 text-sm">
+              {(["all", "open", "pending", "closed"] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setTicketStatus(status)}
+                  className={`pill px-3 py-2 capitalize ${ticketStatus === status ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10"
+                    }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {filterTickets(tickets, ticketStatus).length ? (
+                filterTickets(tickets, ticketStatus).map((ticket) => (
+                  <div
+                    key={ticket.id}
+                    onClick={() => user && setSelectedTicket({ id: ticket.id, subject: ticket.subject })}
+                    className="rounded-2xl bg-slate/50 border border-white/5 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
+                  >
+                    <div>
+                      <p className="font-medium">{ticket.subject}</p>
+                      <p className="text-xs text-slate-400">
+                        {ticket.status.toUpperCase()} • Updated {formatRelative(ticket.updatedAt)}
+                      </p>
+                    </div>
+                    <span className="pill px-3 py-1 text-xs capitalize">
+                      {ticket.priority ? `${ticket.priority} • ${ticket.status}` : ticket.status}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-slate-400">No tickets found.</div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Ticket Chat Modal */}
+        {selectedTicket && user && (
+          <TicketChat
+            ticketId={selectedTicket.id}
+            ticketSubject={selectedTicket.subject}
+            userId={user.id}
+            onClose={() => setSelectedTicket(null)}
+            apiBase={apiBase}
+          />
         )}
       </div>
     </main>

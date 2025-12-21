@@ -33,12 +33,14 @@ const toNumber = (value: Numeric) => Number(value ?? 0);
 
 const mapUser = (row: UserRow) => ({
   id: row.id,
-  name: row.name ?? [row.first_name, row.last_name].filter(Boolean).join(" ").trim(),
+  name:
+    row.name ??
+    [row.first_name, row.last_name].filter(Boolean).join(" ").trim(),
   email: row.email,
   balance: toNumber(row.balance),
   monthlySpend: toNumber(row.monthly_spend),
   lastActive: row.last_active,
-  createdAt: row.created_at
+  createdAt: row.created_at,
 });
 
 const mapTicket = (row: TicketRow) => ({
@@ -48,7 +50,7 @@ const mapTicket = (row: TicketRow) => ({
   status: row.status,
   priority: row.priority ?? undefined,
   updatedAt: row.updated_at,
-  createdAt: row.created_at
+  createdAt: row.created_at,
 });
 
 export async function lookupUser(query: string) {
@@ -73,7 +75,8 @@ export async function lookupSupportUser(query: string) {
 }
 
 export async function getUserTickets(userId: string, status?: string) {
-  const whereStatus = status && status !== "all" ? sql`and status = ${status}` : sql``;
+  const whereStatus =
+    status && status !== "all" ? sql`and status = ${status}` : sql``;
   const rows = (await sql`
     select id, user_id, subject, status, priority, updated_at, created_at
     from tickets
@@ -116,7 +119,7 @@ export async function getUserSummary(userId: string) {
   return {
     balance: toNumber(summary.balance),
     monthlySpend: toNumber(summary.monthly_spend),
-    lastActive: summary.last_active
+    lastActive: summary.last_active,
   };
 }
 
@@ -125,7 +128,7 @@ const mapAppUser = (row: UserRow) => ({
   firstName: row.first_name,
   lastName: row.last_name,
   email: row.email,
-  createdAt: row.created_at
+  createdAt: row.created_at,
 });
 
 export async function findAppUserByEmail(email: string) {
@@ -156,9 +159,45 @@ export async function createAppUser(input: {
 }) {
   const rows = (await sql`
     insert into users (first_name, last_name, email, password_hash, balance, monthly_spend, last_active, created_at, name)
-    values (${input.firstName}, ${input.lastName}, ${input.email}, ${input.passwordHash}, 0, 0, now(), now(),
+    values (${input.firstName}, ${input.lastName}, ${input.email}, ${
+    input.passwordHash
+  }, 0, 0, now(), now(),
             ${[input.firstName, input.lastName].filter(Boolean).join(" ")})
     returning id, name, first_name, last_name, email, balance, monthly_spend, last_active, created_at
   `) as UserRow[];
   return mapAppUser(rows[0]);
+}
+
+type SupportUserAuthRow = {
+  id: string;
+  email: string;
+  password_hash: string;
+  name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+};
+
+export async function getSupportUserAuth(email: string) {
+  try {
+    const supportRows = (await sql`
+      select id, email, password_hash, name, first_name, last_name
+      from support_users
+      where lower(email) = ${email.trim().toLowerCase()}
+      limit 1
+    `) as SupportUserAuthRow[];
+
+    if (supportRows[0]) {
+      return supportRows[0];
+    }
+  } catch {}
+
+  const userRows = (await sql`
+    select id, email, password_hash, name, first_name, last_name
+    from users
+    where lower(email) = ${email.trim().toLowerCase()}
+      and (role = 'support' or is_support = true)
+    limit 1
+  `) as SupportUserAuthRow[];
+
+  return userRows[0] ?? null;
 }
