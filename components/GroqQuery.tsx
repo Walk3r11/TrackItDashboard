@@ -149,4 +149,3 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
     </div>
   );
 }
-
