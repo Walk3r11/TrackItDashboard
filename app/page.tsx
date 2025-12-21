@@ -122,12 +122,7 @@ export default function Page() {
       transactionEventSourceRef.current.close();
     }
 
-    const token = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("auth-token="))
-      ?.split("=")[1];
-
-    const url = `${apiBase}/api/transactions/stream?userId=${encodeURIComponent(userId)}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
+    const url = `/api/transactions/stream?userId=${encodeURIComponent(userId)}`;
     const eventSource = new EventSource(url, {
       withCredentials: true,
     });
