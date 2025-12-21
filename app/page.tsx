@@ -247,7 +247,10 @@ export default function Page() {
     try {
       const base = apiBase;
       const url = `${base}/api/tickets?userId=${encodeURIComponent(userId)}`;
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetch(url, { 
+        cache: "no-store",
+        credentials: "include",
+      });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "Failed to load tickets");
