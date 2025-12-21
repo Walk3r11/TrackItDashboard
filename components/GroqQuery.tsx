@@ -63,7 +63,8 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get response");
+        const errorText = await response.text().catch(() => "Unknown error");
+        throw new Error(`Failed to get response: ${errorText}`);
       }
 
       const reader = response.body?.getReader();
@@ -140,7 +141,9 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
     } catch (error) {
       const errorMessage: Message = {
         role: "assistant",
-        content: "Sorry, I encountered an error. Please try again.",
+        content: error instanceof Error 
+          ? `Error: ${error.message}` 
+          : "Sorry, I encountered an error. Please try again.",
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
