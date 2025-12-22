@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Bot, Send, Loader2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 
 type Message = {
   role: "user" | "assistant";
@@ -179,7 +182,59 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
                     : "bg-white/5 border border-white/10 text-slate-200"
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                {msg.role === "assistant" ? (
+                  <div className="text-sm text-slate-200 [&_br]:block [&_br]:leading-4">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw]}
+                      components={{
+                        h1: ({ node, ...props }) => <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0 text-slate-200" {...props} />,
+                        h2: ({ node, ...props }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0 text-slate-200" {...props} />,
+                        h3: ({ node, ...props }) => <h3 className="text-sm font-bold mb-1 mt-2 first:mt-0 text-slate-200" {...props} />,
+                        p: ({ node, ...props }) => <p className="mb-2 last:mb-0 text-slate-200 leading-relaxed" {...props} />,
+                        strong: ({ node, ...props }) => <strong className="font-semibold text-slate-100" {...props} />,
+                        em: ({ node, ...props }) => <em className="italic text-slate-200" {...props} />,
+                        code: ({ node, inline, ...props }: any) =>
+                          inline ? (
+                            <code className="bg-white/10 text-cyan-300 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
+                          ) : (
+                            <code className="block bg-white/5 border border-white/10 rounded p-2 overflow-x-auto text-xs font-mono mb-2" {...props} />
+                          ),
+                        pre: ({ node, ...props }) => (
+                          <pre className="bg-white/5 border border-white/10 rounded p-2 overflow-x-auto mb-2 text-xs" {...props} />
+                        ),
+                        ul: ({ node, ...props }) => <ul className="list-disc list-inside mb-2 space-y-1 text-slate-200 ml-2" {...props} />,
+                        ol: ({ node, ...props }) => <ol className="list-decimal list-inside mb-2 space-y-1 text-slate-200 ml-2" {...props} />,
+                        li: ({ node, ...props }) => <li className="text-slate-200" {...props} />,
+                        blockquote: ({ node, ...props }) => (
+                          <blockquote className="border-l-4 border-slate-600 pl-3 italic text-slate-300 my-2" {...props} />
+                        ),
+                        a: ({ node, ...props }) => (
+                          <a className="text-cyan-300 hover:text-cyan-200 underline" target="_blank" rel="noopener noreferrer" {...props} />
+                        ),
+                        table: ({ node, ...props }) => (
+                          <div className="overflow-x-auto my-3">
+                            <table className="min-w-full border-collapse border border-white/20" {...props} />
+                          </div>
+                        ),
+                        thead: ({ node, ...props }) => <thead className="bg-white/10" {...props} />,
+                        tbody: ({ node, ...props }) => <tbody {...props} />,
+                        tr: ({ node, ...props }) => <tr className="border-b border-white/20 hover:bg-white/5" {...props} />,
+                        th: ({ node, ...props }) => (
+                          <th className="border border-white/20 px-3 py-2 text-left font-semibold text-slate-200" {...props} />
+                        ),
+                        td: ({ node, ...props }) => (
+                          <td className="border border-white/20 px-3 py-2 text-slate-200 [&_br]:block [&_br]:mb-1" {...props} />
+                        ),
+                        hr: ({ node, ...props }) => <hr className="border-white/20 my-3" {...props} />,
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                )}
               </div>
             </div>
           ))
