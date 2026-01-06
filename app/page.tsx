@@ -15,6 +15,7 @@ type User = {
 
 type TicketItem = {
   id: string;
+  userId?: string;
   subject: string;
   status: "open" | "pending" | "closed";
   updatedAt: string;
@@ -28,6 +29,7 @@ type TransactionItem = {
   date: string;
   type: "debit" | "credit";
   category?: string;
+  categoryColor?: string;
 };
 
 type CardItem = {
@@ -52,21 +54,24 @@ export default function Page() {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [cards, setCards] = useState<CardItem[]>([]);
-  const [ticketStatus, setTicketStatus] = useState<"all" | "open" | "pending" | "closed">("all");
-  const [txRange, setTxRange] = useState<"all" | "7d" | "30d">("all");
+  const [ticketStatus, setTicketStatus] = useState<"all" | "open" | "pending" | "closed">("open");
+  const [txRange, setTxRange] = useState<"all" | "1d" | "3d" | "7d" | "30d" | "90d" | "365d">("all");
   const [txQuery, setTxQuery] = useState("");
   const [modalTicketStatus, setModalTicketStatus] = useState<"all" | "open" | "pending" | "closed">("all");
   const [activityExpanded, setActivityExpanded] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<{ id: string; subject: string } | null>(null);
   const [supportUser, setSupportUser] = useState<{ email: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "groq">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "groq" | "insights">("overview");
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const sectionElementRef = useRef<HTMLElement | null>(null);
   const [newTransactionCount, setNewTransactionCount] = useState(0);
+  const [newTransactionUser, setNewTransactionUser] = useState<string | null>(null);
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const transactionEventSourceRef = useRef<EventSource | null>(null);
   const ticketEventSourceRef = useRef<EventSource | null>(null);
-  const userSectionRef = useRef<HTMLDivElement>(null);
+  const userSectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     fetch(`${apiBase}/api/auth/dashboard/session`, {
@@ -79,6 +84,7 @@ export default function Page() {
           if (data.token) {
             setAuthToken(data.token);
           }
+          loadAllTickets("open");
         } else {
           router.push("/login");
         }
@@ -164,6 +170,10 @@ export default function Page() {
             const exists = prev.some((t) => t.id === data.transaction.id);
             if (exists) return prev;
             setNewTransactionCount((count) => count + 1);
+            if (user) {
+              setNewTransactionUser(user.name || user.email);
+              setTimeout(() => setNewTransactionUser(null), 5000);
+            }
             return [data.transaction, ...prev];
           });
         }
@@ -244,6 +254,33 @@ export default function Page() {
     };
   }, []);
 
+  async function loadAllTickets(status?: string) {
+    try {
+      const base = apiBase;
+      const url = `${base}/api/tickets${status ? `?status=${status}` : ""}`;
+      const res = await fetch(url, { 
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to load tickets");
+      }
+      const body = await res.json();
+      const ticketsList = (body.tickets ?? []).map((t: any) => ({
+        id: t.id,
+        userId: t.userId || t.user_id,
+        subject: t.subject,
+        status: t.status,
+        priority: t.priority,
+        updatedAt: t.updatedAt || t.updated_at
+      }));
+      setTickets(ticketsList);
+    } catch (err) {
+      setTickets([]);
+    }
+  }
+
   async function loadTickets(userId: string) {
     try {
       const base = apiBase;
@@ -257,7 +294,14 @@ export default function Page() {
         throw new Error(errorData.error || "Failed to load tickets");
       }
       const body = await res.json();
-      const ticketsList = body.tickets ?? [];
+      const ticketsList = (body.tickets ?? []).map((t: any) => ({
+        id: t.id,
+        userId: t.userId || t.user_id,
+        subject: t.subject,
+        status: t.status,
+        priority: t.priority,
+        updatedAt: t.updatedAt || t.updated_at
+      }));
       setTickets(ticketsList);
     } catch (err) {
       setTickets([]);
@@ -275,9 +319,10 @@ export default function Page() {
         id: tx.id,
         title: tx.category ?? "Transaction",
         amount: typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0),
-        date: tx.created_at ?? tx.date ?? new Date().toISOString(),
+        date: tx.createdAt ?? tx.created_at ?? tx.date ?? new Date().toISOString(),
         type: (typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0)) >= 0 ? "credit" : "debit",
-        category: tx.category ?? undefined
+        category: tx.category ?? undefined,
+        categoryColor: tx.categoryColor ?? undefined
       }));
       setTransactions(mapped);
     } catch (err) {
@@ -359,7 +404,7 @@ export default function Page() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm text-slate-400">User lookup</p>
-              <p className="text-lg font-semibold">Search by email or ID</p>
+              <p className="text-lg font-semibold">Search by email</p>
             </div>
             <Users className="h-6 w-6 text-sky-300" />
           </div>
@@ -367,7 +412,7 @@ export default function Page() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="user@swiftbank.app or UUID"
+              placeholder="customer@example.com"
               className="w-full rounded-2xl bg-white/5 border border-white/15 px-4 py-3 text-sm outline-none focus:border-cyan-300/60 focus:bg-white/10"
             />
             <button
@@ -379,11 +424,16 @@ export default function Page() {
             </button>
           </form>
           {error && <p className="mt-3 text-sm text-rose-300">{error}</p>}
-          {!user && !error && <p className="mt-3 text-sm text-slate-400">Start with a user search to load profile and tickets.</p>}
         </section>
 
         {user && (
-          <section ref={userSectionRef} className="card-surface rounded-3xl p-6 slide-up">
+          <section 
+            ref={(el) => {
+              userSectionRef.current = el;
+              sectionElementRef.current = el;
+            }}
+            className="card-surface rounded-3xl p-6 slide-up"
+          >
             <div className="flex items-center justify-between mb-6">
               <div>
                 <p className="text-sm text-slate-400">User data</p>
@@ -392,17 +442,31 @@ export default function Page() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 mb-6 border-b border-white/10">
+            <div 
+              className="flex gap-2 mb-6 border-b border-white/10 overflow-x-auto scrollbar-hide"
+              ref={(el) => {
+                if (el) {
+                  const activeButton = el.querySelector(`[data-tab="${activeTab}"]`) as HTMLElement;
+                  if (activeButton) {
+                    setTimeout(() => {
+                      activeButton.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                    }, 100);
+                  }
+                }
+              }}
+            >
               <button
+                data-tab="overview"
                 onClick={() => {
                   setIsTabTransitioning(true);
                   setTimeout(() => {
                     setActiveTab("overview");
                     setNewTransactionCount(0);
+                    setNewTransactionUser(null);
                     setIsTabTransitioning(false);
                   }, 150);
                 }}
-                className={`px-4 py-2 text-sm font-medium transition-all duration-300 ${
+                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${
                   activeTab === "overview"
                     ? "text-cyan-300 border-b-2 border-cyan-300"
                     : "text-slate-400 hover:text-slate-200"
@@ -411,6 +475,7 @@ export default function Page() {
                 Overview
               </button>
               <button
+                data-tab="tickets"
                 onClick={() => {
                   setIsTabTransitioning(true);
                   setTimeout(() => {
@@ -418,7 +483,7 @@ export default function Page() {
                     setIsTabTransitioning(false);
                   }, 150);
                 }}
-                className={`px-4 py-2 text-sm font-medium transition-all duration-300 ${
+                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${
                   activeTab === "tickets"
                     ? "text-cyan-300 border-b-2 border-cyan-300"
                     : "text-slate-400 hover:text-slate-200"
@@ -430,6 +495,7 @@ export default function Page() {
                 </span>
               </button>
               <button
+                data-tab="groq"
                 onClick={() => {
                   setIsTabTransitioning(true);
                   setTimeout(() => {
@@ -437,7 +503,7 @@ export default function Page() {
                     setIsTabTransitioning(false);
                   }, 150);
                 }}
-                className={`px-4 py-2 text-sm font-medium transition-all duration-300 ${
+                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${
                   activeTab === "groq"
                     ? "text-cyan-300 border-b-2 border-cyan-300"
                     : "text-slate-400 hover:text-slate-200"
@@ -445,7 +511,32 @@ export default function Page() {
               >
                 <span className="flex items-center gap-2">
                   <Bot className="h-4 w-4" />
-                  Groq Query
+                  AI Assistant
+                </span>
+              </button>
+              <button
+                data-tab="insights"
+                onClick={() => {
+                  setIsTabTransitioning(true);
+                  setTimeout(() => {
+                    setActiveTab("insights");
+                    setIsTabTransitioning(false);
+                    if (sectionElementRef.current) {
+                      setTimeout(() => {
+                        sectionElementRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 200);
+                    }
+                  }, 150);
+                }}
+                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${
+                  activeTab === "insights"
+                    ? "text-cyan-300 border-b-2 border-cyan-300"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Zap className="h-4 w-4" />
+                  Insights
                 </span>
               </button>
             </div>
@@ -484,34 +575,66 @@ export default function Page() {
                   </div>
 
                   <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
                         <p className="text-base text-slate-200">Recent Transactions</p>
                         {newTransactionCount > 0 && (
                           <span className="px-2 py-0.5 text-xs font-semibold bg-cyan-400 text-slate-900 rounded-full animate-pulse">
-                            {newTransactionCount} new
+                            {newTransactionCount} new{newTransactionUser ? ` (${newTransactionUser})` : ""}
                           </span>
                         )}
                       </div>
                       <ShieldCheck className="h-5 w-5 text-amber-300" />
                     </div>
+                    <div className="mb-4 space-y-2">
+                      <input
+                        type="text"
+                        value={txQuery}
+                        onChange={(e) => setTxQuery(e.target.value)}
+                        placeholder="Search by name..."
+                        className="w-full rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-sm outline-none focus:border-cyan-300/60 focus:bg-white/10"
+                      />
+                      <div className="flex gap-2 flex-wrap">
+                        {(["all", "1d", "3d", "7d", "30d", "90d", "365d"] as const).map((range) => (
+                          <button
+                            key={range}
+                            onClick={() => setTxRange(range)}
+                            className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                              txRange === range
+                                ? "bg-white/10 border border-white/30"
+                                : "bg-white/5 border border-white/10 hover:bg-white/8"
+                            }`}
+                          >
+                            {range === "all" ? "All" : range === "1d" ? "1 day" : range === "3d" ? "3 days" : range === "7d" ? "7 days" : range === "30d" ? "30 days" : range === "90d" ? "3 months" : "1 year"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div className="mt-4 space-y-3 max-h-[300px] overflow-y-auto pr-3 scroll-accent">
-                      {transactions.slice(0, 10).length ? (
-                        transactions.slice(0, 10).map((tx) => (
-                          <div key={tx.id} className="flex items-center justify-between">
-                            <div>
-                              <p className="font-semibold text-slate-100 text-sm">{tx.title}</p>
-                              <p className="text-xs text-slate-400">
-                                {tx.category ? `${tx.category} • ` : ""}{formatShortDate(tx.date)}
-                              </p>
+                      {filterTransactions(transactions, txRange, txQuery).slice(0, 10).length ? (
+                        filterTransactions(transactions, txRange, txQuery).slice(0, 10).map((tx) => {
+                          const categoryColor = tx.categoryColor || (tx.category ? getCategoryColor(tx.category) : null);
+                          return (
+                            <div key={tx.id} className="flex items-center justify-between">
+                              <div>
+                                <p 
+                                  className="font-semibold text-sm"
+                                  style={{ color: categoryColor || "#e2e8f0" }}
+                                >
+                                  {tx.title}
+                                </p>
+                                <p className="text-xs text-slate-400">
+                                  {tx.category ? `${tx.category} • ` : ""}{formatShortDate(tx.date)}
+                                </p>
+                              </div>
+                              <span className={`font-semibold text-sm ${tx.type === "credit" ? "text-green-400" : "text-rose-300"}`}>
+                                {tx.type === "credit" ? "+" : "-"}€{formatEuro(tx.amount)}
+                              </span>
                             </div>
-                            <span className={`font-semibold text-sm ${tx.type === "credit" ? "text-lime-300" : "text-rose-300"}`}>
-                              {tx.type === "credit" ? "+" : "-"}€{formatEuro(tx.amount)}
-                            </span>
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
-                        <p className="text-sm text-slate-400">No recent transactions.</p>
+                        <p className="text-sm text-slate-400">No transactions found.</p>
                       )}
                     </div>
                   </div>
@@ -539,18 +662,39 @@ export default function Page() {
                     filterTickets(tickets, ticketStatus).map((ticket) => (
                       <div
                         key={ticket.id}
-                        onClick={() => setSelectedTicket({ id: ticket.id, subject: ticket.subject })}
-                        className="rounded-2xl bg-slate/50 border border-white/5 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
+                        onClick={() => {
+                          if (ticket.userId && !user) {
+                            setUser({ id: ticket.userId, name: "", email: "", lastActive: "" });
+                          }
+                          setSelectedTicket({ id: ticket.id, subject: ticket.subject });
+                        }}
+                        className="rounded-2xl bg-gradient-to-r from-slate-800/60 to-slate-900/60 border border-white/10 px-4 py-3 flex items-center justify-between cursor-pointer hover:from-slate-700/60 hover:to-slate-800/60 hover:border-cyan-400/30 transition-all duration-200 hover:shadow-lg hover:shadow-cyan-500/10"
                       >
-                        <div>
-                          <p className="font-medium">{ticket.subject}</p>
-                          <p className="text-xs text-slate-400">
-                            {ticket.status.toUpperCase()} • Updated {formatRelative(ticket.updatedAt)}
+                        <div className="flex-1">
+                          <p className="font-semibold text-slate-100">{ticket.subject}</p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Updated {formatRelative(ticket.updatedAt)}
                           </p>
                         </div>
-                        <span className="pill px-3 py-1 text-xs capitalize">
-                          {ticket.priority ? `${ticket.priority} • ${ticket.status}` : ticket.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-3 py-1.5 rounded-2xl text-xs font-medium ${
+                            ticket.status === 'open' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' :
+                            ticket.status === 'pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                            ticket.status === 'closed' ? 'bg-slate-500/20 text-slate-400 border border-slate-500/30' :
+                            'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                          }`}>
+                            {ticket.status.toUpperCase()}
+                          </span>
+                          {ticket.priority && (
+                            <span className={`px-2.5 py-1 rounded-xl text-xs font-medium ${
+                              ticket.priority === 'high' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
+                              ticket.priority === 'medium' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                              'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                            }`}>
+                              {ticket.priority}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))
                   ) : (
@@ -563,6 +707,12 @@ export default function Page() {
             {activeTab === "groq" && (
               <div className={`h-[600px] transition-opacity duration-300 ${isTabTransitioning ? "opacity-0" : "opacity-100"}`}>
                 <GroqQuery userId={user.id} apiBase={apiBase} />
+              </div>
+            )}
+
+            {activeTab === "insights" && user && (
+              <div className={`transition-opacity duration-300 ${isTabTransitioning ? "opacity-0" : "opacity-100"}`}>
+                <InsightsView transactions={transactions} />
               </div>
             )}
           </section>
@@ -582,7 +732,10 @@ export default function Page() {
               {(["all", "open", "pending", "closed"] as const).map((status) => (
                 <button
                   key={status}
-                  onClick={() => setTicketStatus(status)}
+                  onClick={() => {
+                    setTicketStatus(status);
+                    loadAllTickets(status === "all" ? undefined : status);
+                  }}
                   className={`pill px-3 py-2 capitalize ${ticketStatus === status ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10"
                     }`}
                 >
@@ -596,7 +749,14 @@ export default function Page() {
                 filterTickets(tickets, ticketStatus).map((ticket) => (
                   <div
                     key={ticket.id}
-                    onClick={() => user && setSelectedTicket({ id: ticket.id, subject: ticket.subject })}
+                    onClick={() => {
+                      if (ticket.userId) {
+                        if (!user) {
+                          setUser({ id: ticket.userId, name: "", email: "", lastActive: "" });
+                        }
+                        setSelectedTicket({ id: ticket.id, subject: ticket.subject });
+                      }
+                    }}
                     className="rounded-2xl bg-slate/50 border border-white/5 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
                   >
                     <div>
@@ -618,11 +778,14 @@ export default function Page() {
         )}
 
         {/* Ticket Chat Modal */}
-        {selectedTicket && user && (
+        {selectedTicket && (user || (() => {
+          const ticket = tickets.find(t => t.id === selectedTicket.id);
+          return ticket?.userId;
+        })()) && (
           <TicketChat
             ticketId={selectedTicket.id}
             ticketSubject={selectedTicket.subject}
-            userId={user.id}
+            userId={user?.id || tickets.find(t => t.id === selectedTicket.id)?.userId || ""}
             onClose={() => setSelectedTicket(null)}
             apiBase={apiBase}
           />
@@ -661,20 +824,57 @@ function formatShortDate(value: string) {
   }
 }
 
+function getCategoryColor(categoryName: string): string {
+  if (!categoryName) return "#94a3b8";
+  const colors = [
+    "#ef4444", // red
+    "#f97316", // orange
+    "#eab308", // yellow
+    "#84cc16", // lime green
+    "#22c55e", // green
+    "#10b981", // emerald
+    "#14b8a6", // teal
+    "#06b6d4", // cyan
+    "#0ea5e9", // sky blue
+    "#3b82f6", // blue
+    "#6366f1", // indigo
+    "#8b5cf6", // purple
+    "#a855f7", // violet
+    "#d946ef", // fuchsia
+    "#ec4899", // pink
+    "#f43f5e", // rose
+    "#f59e0b", // amber
+    "#06b6d4", // sky
+    "#22c55e", // emerald
+    "#8b5cf6"  // purple
+  ];
+  let hash = 0;
+  for (let i = 0; i < categoryName.length; i++) {
+    hash = categoryName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+}
+
 function formatEuro(amount: number) {
   const useConversion = new Date() < euroCutover;
   const value = useConversion ? amount / bgnToEur : amount;
   return Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-function filterTransactionsModal(txs: TransactionItem[], range: "all" | "7d" | "30d", query: string) {
+function filterTransactions(txs: TransactionItem[], range: "all" | "1d" | "3d" | "7d" | "30d" | "90d" | "365d", query: string) {
   const now = new Date();
   const lower = query.trim().toLowerCase();
-  return txs.filter((tx) => {
+  return txs.filter((tx: TransactionItem) => {
     const txDate = new Date(tx.date);
     if (!isNaN(txDate.getTime())) {
-      if (range === "7d" && now.getTime() - txDate.getTime() > 7 * 24 * 60 * 60 * 1000) return false;
-      if (range === "30d" && now.getTime() - txDate.getTime() > 30 * 24 * 60 * 60 * 1000) return false;
+      const diff = now.getTime() - txDate.getTime();
+      if (range === "1d" && diff > 1 * 24 * 60 * 60 * 1000) return false;
+      if (range === "3d" && diff > 3 * 24 * 60 * 60 * 1000) return false;
+      if (range === "7d" && diff > 7 * 24 * 60 * 60 * 1000) return false;
+      if (range === "30d" && diff > 30 * 24 * 60 * 60 * 1000) return false;
+      if (range === "90d" && diff > 90 * 24 * 60 * 60 * 1000) return false;
+      if (range === "365d" && diff > 365 * 24 * 60 * 60 * 1000) return false;
     }
     if (lower) {
       const haystack = `${tx.title} ${tx.category ?? ""} ${tx.amount}`.toLowerCase();
@@ -682,4 +882,164 @@ function filterTransactionsModal(txs: TransactionItem[], range: "all" | "7d" | "
     }
     return true;
   });
+}
+
+function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
+  const [timeframe, setTimeframe] = useState<"7d" | "30d" | "90d" | "365d" | "all">("30d");
+
+  const filtered = filterTransactions(transactions, timeframe, "");
+  
+  const income = filtered.filter(tx => tx.type === "credit").reduce((sum, tx) => sum + tx.amount, 0);
+  const expenses = filtered.filter(tx => tx.type === "debit").reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const net = income - expenses;
+  const totalCount = filtered.length;
+  const incomeCount = filtered.filter(tx => tx.type === "credit").length;
+  const expenseCount = filtered.filter(tx => tx.type === "debit").length;
+  const avgTransaction = totalCount > 0 ? (income + expenses) / totalCount : 0;
+  
+  const days = timeframe === "7d" ? 7 : timeframe === "30d" ? 30 : timeframe === "90d" ? 90 : timeframe === "365d" ? 365 : 
+    transactions.length > 0 ? Math.max(1, Math.floor((new Date().getTime() - new Date(transactions[transactions.length - 1].date).getTime()) / (1000 * 60 * 60 * 24))) : 1;
+  const transactionsPerDay = days > 0 ? totalCount / days : 0;
+
+  const categoryTotals: Record<string, number> = {};
+  filtered.forEach(tx => {
+    if (tx.type === "debit" && tx.category) {
+      categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + Math.abs(tx.amount);
+    }
+  });
+  
+  const topCategories = Object.entries(categoryTotals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, amount]) => ({
+      name,
+      amount,
+      percentage: expenses > 0 ? (amount / expenses) * 100 : 0
+    }));
+
+  const largestTransactions = [...filtered]
+    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+    .slice(0, 10);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-slate-100">Financial Insights</h2>
+        <div className="flex gap-2">
+          {(["7d", "30d", "90d", "365d", "all"] as const).map((tf) => (
+            <button
+              key={tf}
+              onClick={() => setTimeframe(tf)}
+              className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                timeframe === tf
+                  ? "bg-white/10 border border-white/30"
+                  : "bg-white/5 border border-white/10 hover:bg-white/8"
+              }`}
+            >
+              {tf === "7d" ? "Week" : tf === "30d" ? "Month" : tf === "90d" ? "Quarter" : tf === "365d" ? "Year" : "All"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-2xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 p-4">
+          <p className="text-sm text-slate-400">Income</p>
+          <p className="text-2xl font-bold text-green-400 mt-1">+€{formatEuro(income)}</p>
+          <p className="text-xs text-slate-500 mt-1">{incomeCount} transactions</p>
+        </div>
+        <div className="rounded-2xl bg-gradient-to-br from-rose-500/10 to-red-500/10 border border-rose-500/20 p-4">
+          <p className="text-sm text-slate-400">Expenses</p>
+          <p className="text-2xl font-bold text-rose-400 mt-1">-€{formatEuro(expenses)}</p>
+          <p className="text-xs text-slate-500 mt-1">{expenseCount} transactions</p>
+        </div>
+        <div className={`rounded-2xl bg-gradient-to-br ${net >= 0 ? 'from-cyan-500/10 to-blue-500/10 border-cyan-500/20' : 'from-amber-500/10 to-orange-500/10 border-amber-500/20'} p-4`}>
+          <p className="text-sm text-slate-400">Net Balance</p>
+          <p className={`text-2xl font-bold mt-1 ${net >= 0 ? 'text-cyan-400' : 'text-amber-400'}`}>
+            {net >= 0 ? '+' : ''}€{formatEuro(net)}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">{totalCount} total</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-2xl bg-slate-800/50 border border-white/10 p-4">
+          <h3 className="text-sm font-semibold text-slate-300 mb-3">Statistics</h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Avg Transaction</span>
+              <span className="text-slate-200">€{formatEuro(avgTransaction)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Transactions/Day</span>
+              <span className="text-slate-200">{transactionsPerDay.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Period</span>
+              <span className="text-slate-200">{days} days</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-slate-800/50 border border-white/10 p-4">
+          <h3 className="text-sm font-semibold text-slate-300 mb-3">Top Categories</h3>
+          <div className="space-y-2 max-h-48 overflow-y-auto scroll-accent">
+            {topCategories.length > 0 ? (
+              topCategories.map((cat) => (
+                <div key={cat.name} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2 flex-1">
+                    <div 
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: getCategoryColor(cat.name) }}
+                    />
+                    <span className="text-slate-300">{cat.name}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-slate-400 text-xs">{cat.percentage.toFixed(1)}%</span>
+                    <span className="text-slate-200">€{formatEuro(cat.amount)}</span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-slate-400 text-sm">No category data</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-slate-800/50 border border-white/10 p-4">
+        <h3 className="text-sm font-semibold text-slate-300 mb-3">Largest Transactions</h3>
+        <div className="space-y-2 max-h-64 overflow-y-auto scroll-accent">
+          {largestTransactions.length > 0 ? (
+            largestTransactions.map((tx) => {
+              const categoryColor = tx.categoryColor || (tx.category ? getCategoryColor(tx.category) : null);
+              return (
+                <div key={tx.id} className="flex items-center justify-between text-sm py-2 border-b border-white/5 last:border-0">
+                  <div className="flex items-center gap-2 flex-1">
+                    {categoryColor && (
+                      <div 
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: categoryColor }}
+                      />
+                    )}
+                    <span className="text-slate-300">{tx.title}</span>
+                    <span className="text-xs text-slate-500">{formatShortDate(tx.date)}</span>
+                  </div>
+                  <span className={`font-semibold ${tx.type === "credit" ? "text-green-400" : "text-rose-400"}`}>
+                    {tx.type === "credit" ? "+" : "-"}€{formatEuro(Math.abs(tx.amount))}
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-slate-400 text-sm">No transactions</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function filterTransactionsModal(txs: TransactionItem[], range: "all" | "1d" | "3d" | "7d" | "30d" | "90d" | "365d", query: string) {
+  return filterTransactions(txs, range, query);
 }
