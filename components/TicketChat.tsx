@@ -135,7 +135,7 @@ export default function TicketChat({
     };
 
     eventSourceRef.current = eventSource;
-  }, [apiBase, ticketId, userId]);
+  }, [apiBase, ticketId, userId, onStatusChange]);
 
   useEffect(() => {
     setTicketStatus(initialStatus);

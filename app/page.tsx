@@ -775,7 +775,7 @@ export default function Page() {
                         if (!user) {
                           setUser({ id: ticket.userId, name: "", email: "", lastActive: "" });
                         }
-                        setSelectedTicket({ id: ticket.id, subject: ticket.subject });
+                        setSelectedTicket({ id: ticket.id, subject: ticket.subject, status: ticket.status });
                       }
                     }}
                     className="rounded-2xl bg-slate/50 border border-white/5 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
