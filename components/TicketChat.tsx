@@ -91,19 +91,21 @@ export default function TicketChat({
             return [...prev, data.message];
           });
         } else if (data.type === "error") {
+          console.error("SSE error:", data.error);
+        } else if (data.type === "connected") {
         }
       } catch (err) {
       }
     };
 
-    eventSource.onerror = (err) => {
-      if (eventSource.readyState === EventSource.CLOSED) {
+    eventSource.onerror = () => {
+      if (eventSource.readyState === EventSource.CLOSED || eventSource.readyState === EventSource.CONNECTING) {
         eventSource.close();
         setTimeout(() => {
           if (eventSourceRef.current === eventSource) {
             startSSE();
           }
-        }, 1000);
+        }, 500);
       }
     };
 
