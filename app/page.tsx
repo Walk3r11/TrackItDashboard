@@ -57,7 +57,7 @@ export default function Page() {
   const [ticketStatus, setTicketStatus] = useState<"all" | "open" | "pending" | "closed">("all");
   const [txRange, setTxRange] = useState<"all" | "1d" | "3d" | "7d" | "30d" | "90d" | "365d">("all");
   const [txQuery, setTxQuery] = useState("");
-  const [selectedTicket, setSelectedTicket] = useState<{ id: string; subject: string } | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<{ id: string; subject: string; status: "open" | "pending" | "closed" } | null>(null);
   const [supportUser, setSupportUser] = useState<{ email: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "groq" | "insights">("overview");
@@ -689,7 +689,7 @@ export default function Page() {
                           if (ticket.userId && !user) {
                             setUser({ id: ticket.userId, name: "", email: "", lastActive: "" });
                           }
-                          setSelectedTicket({ id: ticket.id, subject: ticket.subject });
+                          setSelectedTicket({ id: ticket.id, subject: ticket.subject, status: ticket.status });
                         }}
                         className="rounded-2xl bg-gradient-to-r from-slate-800/60 to-slate-900/60 border border-white/10 px-4 py-3 flex items-center justify-between cursor-pointer hover:from-slate-700/60 hover:to-slate-800/60 hover:border-cyan-400/30 transition-all duration-200 hover:shadow-lg hover:shadow-cyan-500/10"
                       >
@@ -805,9 +805,14 @@ export default function Page() {
             <TicketChat
               ticketId={selectedTicket.id}
               ticketSubject={selectedTicket.subject}
+              ticketStatus={selectedTicket.status}
               userId={user?.id || tickets.find(t => t.id === selectedTicket.id)?.userId || ""}
               onClose={() => setSelectedTicket(null)}
               apiBase={apiBase}
+              onStatusChange={(newStatus) => {
+                setTickets(prev => prev.map(t => t.id === selectedTicket.id ? { ...t, status: newStatus } : t));
+                setSelectedTicket(prev => prev ? { ...prev, status: newStatus } : null);
+              }}
             />
           )}
       </div>
