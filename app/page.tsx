@@ -772,9 +772,6 @@ export default function Page() {
                     key={ticket.id}
                     onClick={() => {
                       if (ticket.userId) {
-                        if (!user) {
-                          setUser({ id: ticket.userId, name: "", email: "", lastActive: "" });
-                        }
                         setSelectedTicket({ id: ticket.id, subject: ticket.subject, status: ticket.status });
                       }
                     }}

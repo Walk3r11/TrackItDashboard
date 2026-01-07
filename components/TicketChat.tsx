@@ -291,7 +291,7 @@ export default function TicketChat({
               <button
                 onClick={closeTicket}
                 disabled={isClosingTicket}
-                className="px-4 py-2 rounded-xl bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-xl bg-slate-700 hover:bg-rose-600/80 text-slate-200 hover:text-white text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-600/50 hover:border-rose-500/50"
               >
                 {isClosingTicket ? "Closing..." : "Close Ticket"}
               </button>
