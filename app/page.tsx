@@ -54,19 +54,17 @@ export default function Page() {
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [cards, setCards] = useState<CardItem[]>([]);
-  const [ticketStatus, setTicketStatus] = useState<"all" | "open" | "pending" | "closed">("open");
+  const [ticketStatus, setTicketStatus] = useState<"all" | "open" | "pending" | "closed">("all");
   const [txRange, setTxRange] = useState<"all" | "1d" | "3d" | "7d" | "30d" | "90d" | "365d">("all");
   const [txQuery, setTxQuery] = useState("");
-  const [modalTicketStatus, setModalTicketStatus] = useState<"all" | "open" | "pending" | "closed">("all");
-  const [activityExpanded, setActivityExpanded] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<{ id: string; subject: string } | null>(null);
   const [supportUser, setSupportUser] = useState<{ email: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "tickets" | "groq" | "insights">("overview");
-  const sectionRef = useRef<HTMLElement | null>(null);
   const sectionElementRef = useRef<HTMLElement | null>(null);
   const [newTransactionCount, setNewTransactionCount] = useState(0);
   const [newTransactionUser, setNewTransactionUser] = useState<string | null>(null);
+  const [newTransactionIds, setNewTransactionIds] = useState<Set<string>>(new Set());
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const transactionEventSourceRef = useRef<EventSource | null>(null);
@@ -84,7 +82,7 @@ export default function Page() {
           if (data.token) {
             setAuthToken(data.token);
           }
-          loadAllTickets("open");
+          loadAllTickets();
         } else {
           router.push("/login");
         }
@@ -98,7 +96,7 @@ export default function Page() {
   }, [router]);
 
   async function handleLogout() {
-    await fetch(`${apiBase}/api/auth/dashboard/logout`, { 
+    await fetch(`${apiBase}/api/auth/dashboard/logout`, {
       method: "POST",
       credentials: "include",
     });
@@ -132,7 +130,7 @@ export default function Page() {
       setNewTransactionCount(0);
       startTransactionStream(body.user.id);
       startTicketStream(body.user.id);
-      
+
       setTimeout(() => {
         if (userSectionRef.current) {
           userSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -166,15 +164,38 @@ export default function Page() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "transaction" && data.transaction) {
+          const tx = data.transaction;
           setTransactions((prev) => {
-            const exists = prev.some((t) => t.id === data.transaction.id);
+            const exists = prev.some((t) => t.id === tx.id);
             if (exists) return prev;
-            setNewTransactionCount((count) => count + 1);
+            const mappedTx: TransactionItem = {
+              id: tx.id,
+              title: tx.category ?? "Transaction",
+              amount: typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0),
+              date: tx.createdAt ?? tx.created_at ?? tx.date ?? new Date().toISOString(),
+              type: (typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0)) >= 0 ? "credit" : "debit",
+              category: tx.category ?? undefined,
+              categoryColor: tx.categoryColor ?? undefined
+            };
+            return [mappedTx, ...prev];
+          });
+          setNewTransactionIds((ids) => {
+            if (ids.has(tx.id)) return ids;
+            const newIds = new Set([...ids, tx.id]);
+            setNewTransactionCount(newIds.size);
+            setTimeout(() => {
+              setNewTransactionIds((currentIds) => {
+                const newSet = new Set(currentIds);
+                newSet.delete(tx.id);
+                setNewTransactionCount(newSet.size);
+                return newSet;
+              });
+            }, 10000);
             if (user) {
               setNewTransactionUser(user.name || user.email);
               setTimeout(() => setNewTransactionUser(null), 5000);
             }
-            return [data.transaction, ...prev];
+            return newIds;
           });
         }
       } catch (err) {
@@ -258,7 +279,7 @@ export default function Page() {
     try {
       const base = apiBase;
       const url = `${base}/api/tickets${status ? `?status=${status}` : ""}`;
-      const res = await fetch(url, { 
+      const res = await fetch(url, {
         cache: "no-store",
         credentials: "include",
       });
@@ -285,7 +306,7 @@ export default function Page() {
     try {
       const base = apiBase;
       const url = `${base}/api/tickets?userId=${encodeURIComponent(userId)}`;
-      const res = await fetch(url, { 
+      const res = await fetch(url, {
         cache: "no-store",
         credentials: "include",
       });
@@ -427,7 +448,7 @@ export default function Page() {
         </section>
 
         {user && (
-          <section 
+          <section
             ref={(el) => {
               userSectionRef.current = el;
               sectionElementRef.current = el;
@@ -441,8 +462,7 @@ export default function Page() {
               </div>
             </div>
 
-            {/* Tabs */}
-            <div 
+            <div
               className="flex gap-2 mb-6 border-b border-white/10 overflow-x-auto scrollbar-hide"
               ref={(el) => {
                 if (el) {
@@ -466,11 +486,10 @@ export default function Page() {
                     setIsTabTransitioning(false);
                   }, 150);
                 }}
-                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${
-                  activeTab === "overview"
+                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "overview"
                     ? "text-cyan-300 border-b-2 border-cyan-300"
                     : "text-slate-400 hover:text-slate-200"
-                }`}
+                  }`}
               >
                 Overview
               </button>
@@ -483,11 +502,10 @@ export default function Page() {
                     setIsTabTransitioning(false);
                   }, 150);
                 }}
-                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${
-                  activeTab === "tickets"
+                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "tickets"
                     ? "text-cyan-300 border-b-2 border-cyan-300"
                     : "text-slate-400 hover:text-slate-200"
-                }`}
+                  }`}
               >
                 <span className="flex items-center gap-2">
                   <Ticket className="h-4 w-4" />
@@ -503,11 +521,10 @@ export default function Page() {
                     setIsTabTransitioning(false);
                   }, 150);
                 }}
-                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${
-                  activeTab === "groq"
+                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "groq"
                     ? "text-cyan-300 border-b-2 border-cyan-300"
                     : "text-slate-400 hover:text-slate-200"
-                }`}
+                  }`}
               >
                 <span className="flex items-center gap-2">
                   <Bot className="h-4 w-4" />
@@ -528,11 +545,10 @@ export default function Page() {
                     }
                   }, 150);
                 }}
-                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${
-                  activeTab === "insights"
+                className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "insights"
                     ? "text-cyan-300 border-b-2 border-cyan-300"
                     : "text-slate-400 hover:text-slate-200"
-                }`}
+                  }`}
               >
                 <span className="flex items-center gap-2">
                   <Zap className="h-4 w-4" />
@@ -541,7 +557,6 @@ export default function Page() {
               </button>
             </div>
 
-            {/* Tab Content */}
             {activeTab === "overview" && (
               <div className={`space-y-4 transition-opacity duration-300 ${isTabTransitioning ? "opacity-0" : "opacity-100"}`}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -599,25 +614,31 @@ export default function Page() {
                           <button
                             key={range}
                             onClick={() => setTxRange(range)}
-                            className={`px-3 py-1 text-xs rounded-lg transition-colors ${
-                              txRange === range
+                            className={`px-3 py-1 text-xs rounded-lg transition-colors ${txRange === range
                                 ? "bg-white/10 border border-white/30"
                                 : "bg-white/5 border border-white/10 hover:bg-white/8"
-                            }`}
+                              }`}
                           >
                             {range === "all" ? "All" : range === "1d" ? "1 day" : range === "3d" ? "3 days" : range === "7d" ? "7 days" : range === "30d" ? "30 days" : range === "90d" ? "3 months" : "1 year"}
                           </button>
                         ))}
                       </div>
                     </div>
-                    <div className="mt-4 space-y-3 max-h-[300px] overflow-y-auto pr-3 scroll-accent">
-                      {filterTransactions(transactions, txRange, txQuery).slice(0, 10).length ? (
-                        filterTransactions(transactions, txRange, txQuery).slice(0, 10).map((tx) => {
+                    <div
+                      className="mt-4 space-y-2 max-h-[300px] overflow-y-auto pr-3 scroll-accent"
+                      onMouseEnter={() => setNewTransactionCount(0)}
+                    >
+                      {filterTransactions(transactions, txRange, txQuery).length ? (
+                        filterTransactions(transactions, txRange, txQuery).map((tx) => {
                           const categoryColor = tx.categoryColor || (tx.category ? getCategoryColor(tx.category) : null);
+                          const isNew = newTransactionIds.has(tx.id);
                           return (
-                            <div key={tx.id} className="flex items-center justify-between">
-                              <div>
-                                <p 
+                            <div key={tx.id} className={`flex items-center justify-between relative rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5 transition-all duration-200 hover:bg-white/5 hover:border-white/10 ${isNew ? 'border-cyan-400/30 bg-cyan-400/5' : ''}`}>
+                              {isNew && (
+                                <div key={`indicator-${tx.id}`} className="absolute left-0 top-0 bottom-0 w-1.5 bg-cyan-400 rounded-l-lg new-transaction-indicator"></div>
+                              )}
+                              <div className={`flex-1 transition-all duration-300 ${isNew ? 'pl-3' : ''}`}>
+                                <p
                                   className="font-semibold text-sm"
                                   style={{ color: categoryColor || "#e2e8f0" }}
                                 >
@@ -627,9 +648,11 @@ export default function Page() {
                                   {tx.category ? `${tx.category} • ` : ""}{formatShortDate(tx.date)}
                                 </p>
                               </div>
-                              <span className={`font-semibold text-sm ${tx.type === "credit" ? "text-green-400" : "text-rose-300"}`}>
-                                {tx.type === "credit" ? "+" : "-"}€{formatEuro(tx.amount)}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`font-semibold text-sm ${tx.type === "credit" ? "text-green-400" : "text-rose-300"}`}>
+                                  {tx.type === "credit" ? "+" : "-"}€{formatEuro(tx.amount)}
+                                </span>
+                              </div>
                             </div>
                           );
                         })
@@ -677,20 +700,18 @@ export default function Page() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className={`px-3 py-1.5 rounded-2xl text-xs font-medium ${
-                            ticket.status === 'open' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' :
-                            ticket.status === 'pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                            ticket.status === 'closed' ? 'bg-slate-500/20 text-slate-400 border border-slate-500/30' :
-                            'bg-slate-500/20 text-slate-400 border border-slate-500/30'
-                          }`}>
+                          <span className={`px-3 py-1.5 rounded-2xl text-xs font-medium ${ticket.status === 'open' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' :
+                              ticket.status === 'pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                                ticket.status === 'closed' ? 'bg-slate-500/20 text-slate-400 border border-slate-500/30' :
+                                  'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                            }`}>
                             {ticket.status.toUpperCase()}
                           </span>
                           {ticket.priority && (
-                            <span className={`px-2.5 py-1 rounded-xl text-xs font-medium ${
-                              ticket.priority === 'high' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
-                              ticket.priority === 'medium' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                              'bg-slate-500/20 text-slate-400 border border-slate-500/30'
-                            }`}>
+                            <span className={`px-2.5 py-1 rounded-xl text-xs font-medium ${ticket.priority === 'high' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
+                                ticket.priority === 'medium' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                                  'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                              }`}>
                               {ticket.priority}
                             </span>
                           )}
@@ -777,19 +798,18 @@ export default function Page() {
           </section>
         )}
 
-        {/* Ticket Chat Modal */}
         {selectedTicket && (user || (() => {
           const ticket = tickets.find(t => t.id === selectedTicket.id);
           return ticket?.userId;
         })()) && (
-          <TicketChat
-            ticketId={selectedTicket.id}
-            ticketSubject={selectedTicket.subject}
-            userId={user?.id || tickets.find(t => t.id === selectedTicket.id)?.userId || ""}
-            onClose={() => setSelectedTicket(null)}
-            apiBase={apiBase}
-          />
-        )}
+            <TicketChat
+              ticketId={selectedTicket.id}
+              ticketSubject={selectedTicket.subject}
+              userId={user?.id || tickets.find(t => t.id === selectedTicket.id)?.userId || ""}
+              onClose={() => setSelectedTicket(null)}
+              apiBase={apiBase}
+            />
+          )}
       </div>
     </main>
   );
@@ -827,26 +847,26 @@ function formatShortDate(value: string) {
 function getCategoryColor(categoryName: string): string {
   if (!categoryName) return "#94a3b8";
   const colors = [
-    "#ef4444", // red
-    "#f97316", // orange
-    "#eab308", // yellow
-    "#84cc16", // lime green
-    "#22c55e", // green
-    "#10b981", // emerald
-    "#14b8a6", // teal
-    "#06b6d4", // cyan
-    "#0ea5e9", // sky blue
-    "#3b82f6", // blue
-    "#6366f1", // indigo
-    "#8b5cf6", // purple
-    "#a855f7", // violet
-    "#d946ef", // fuchsia
-    "#ec4899", // pink
-    "#f43f5e", // rose
-    "#f59e0b", // amber
-    "#06b6d4", // sky
-    "#22c55e", // emerald
-    "#8b5cf6"  // purple
+    "#ef4444",
+    "#f97316",
+    "#eab308",
+    "#84cc16",
+    "#22c55e",
+    "#10b981",
+    "#14b8a6",
+    "#06b6d4",
+    "#0ea5e9",
+    "#3b82f6",
+    "#6366f1",
+    "#8b5cf6",
+    "#a855f7",
+    "#d946ef",
+    "#ec4899",
+    "#f43f5e",
+    "#f59e0b",
+    "#06b6d4",
+    "#22c55e",
+    "#8b5cf6"
   ];
   let hash = 0;
   for (let i = 0; i < categoryName.length; i++) {
@@ -888,7 +908,7 @@ function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
   const [timeframe, setTimeframe] = useState<"7d" | "30d" | "90d" | "365d" | "all">("30d");
 
   const filtered = filterTransactions(transactions, timeframe, "");
-  
+
   const income = filtered.filter(tx => tx.type === "credit").reduce((sum, tx) => sum + tx.amount, 0);
   const expenses = filtered.filter(tx => tx.type === "debit").reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   const net = income - expenses;
@@ -896,8 +916,8 @@ function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
   const incomeCount = filtered.filter(tx => tx.type === "credit").length;
   const expenseCount = filtered.filter(tx => tx.type === "debit").length;
   const avgTransaction = totalCount > 0 ? (income + expenses) / totalCount : 0;
-  
-  const days = timeframe === "7d" ? 7 : timeframe === "30d" ? 30 : timeframe === "90d" ? 90 : timeframe === "365d" ? 365 : 
+
+  const days = timeframe === "7d" ? 7 : timeframe === "30d" ? 30 : timeframe === "90d" ? 90 : timeframe === "365d" ? 365 :
     transactions.length > 0 ? Math.max(1, Math.floor((new Date().getTime() - new Date(transactions[transactions.length - 1].date).getTime()) / (1000 * 60 * 60 * 24))) : 1;
   const transactionsPerDay = days > 0 ? totalCount / days : 0;
 
@@ -907,7 +927,7 @@ function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
       categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + Math.abs(tx.amount);
     }
   });
-  
+
   const topCategories = Object.entries(categoryTotals)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
@@ -930,11 +950,10 @@ function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
-              className={`px-3 py-1 text-xs rounded-lg transition-colors ${
-                timeframe === tf
+              className={`px-3 py-1 text-xs rounded-lg transition-colors ${timeframe === tf
                   ? "bg-white/10 border border-white/30"
                   : "bg-white/5 border border-white/10 hover:bg-white/8"
-              }`}
+                }`}
             >
               {tf === "7d" ? "Week" : tf === "30d" ? "Month" : tf === "90d" ? "Quarter" : tf === "365d" ? "Year" : "All"}
             </button>
@@ -988,7 +1007,7 @@ function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
               topCategories.map((cat) => (
                 <div key={cat.name} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2 flex-1">
-                    <div 
+                    <div
                       className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: getCategoryColor(cat.name) }}
                     />
@@ -1017,7 +1036,7 @@ function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
                 <div key={tx.id} className="flex items-center justify-between text-sm py-2 border-b border-white/5 last:border-0">
                   <div className="flex items-center gap-2 flex-1">
                     {categoryColor && (
-                      <div 
+                      <div
                         className="w-2 h-2 rounded-full"
                         style={{ backgroundColor: categoryColor }}
                       />

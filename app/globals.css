@@ -244,6 +244,22 @@ button:active {
   animation: slideInFromBottom 0.5s ease-out forwards;
 }
 
+@keyframes slideInFromLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-12px) scaleX(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scaleX(1);
+  }
+}
+
+.new-transaction-indicator {
+  transform-origin: left center;
+  animation: slideInFromLeft 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
 @supports not (animation: fadeIn) {
   .fade-in,
   .zoom-in-95,
