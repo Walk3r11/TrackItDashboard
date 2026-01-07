@@ -235,13 +235,20 @@ export default function TicketChat({
     setError(null);
     
     try {
+      const token = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("auth-token="))
+        ?.split("=")[1];
+
       const res = await fetch(
         `${apiBase}/api/tickets/${ticketId}/status`,
         {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
+          credentials: "include",
           body: JSON.stringify({
             status: "closed",
           }),
