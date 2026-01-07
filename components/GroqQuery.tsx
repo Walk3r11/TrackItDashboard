@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Bot, Send, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -20,7 +20,11 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const optimisticUserMessageRef = useRef<string | null>(null);
+  const optimisticAssistantMessageRef = useRef<string | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -30,14 +34,85 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
     scrollToBottom();
   }, [messages]);
 
+  const saveChatHistory = useCallback(async (messagesToSave: Message[], chatIdToUse: string | null) => {
+    try {
+      const token = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("auth-token="))
+        ?.split("=")[1];
+
+      const finalChatId = chatIdToUse || crypto.randomUUID();
+      
+      await fetch(`${apiBase}/api/chat/history`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          messages: messagesToSave,
+          chatId: finalChatId,
+        }),
+      });
+
+      if (!chatIdToUse) {
+        setChatId(finalChatId);
+      }
+    } catch (error) {
+      console.error("Failed to save chat history:", error);
+    }
+  }, [apiBase]);
+
+  const loadChatHistory = useCallback(async () => {
+    try {
+      const token = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("auth-token="))
+        ?.split("=")[1];
+
+      const response = await fetch(`${apiBase}/api/chat/history?userId=${userId}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
+          setMessages(data.messages);
+          if (data.chatId) {
+            setChatId(data.chatId);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load chat history:", error);
+    } finally {
+      setInitialLoading(false);
+    }
+  }, [apiBase, userId]);
+
+  useEffect(() => {
+    loadChatHistory();
+  }, [loadChatHistory]);
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!input.trim() || loading) return;
 
     const userMessage: Message = { role: "user", content: input.trim() };
-    setMessages((prev) => [...prev, userMessage]);
+    const userMessageId = `user-${Date.now()}-${Math.random()}`;
+    optimisticUserMessageRef.current = userMessageId;
+    
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInput("");
     setLoading(true);
+
+    saveChatHistory(updatedMessages, chatId).catch(() => {
+    });
 
     try {
       const token = document.cookie
@@ -53,7 +128,7 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
         },
         credentials: "include",
         body: JSON.stringify({
-          messages: [...messages, userMessage],
+          messages: updatedMessages,
           model: "openai/gpt-oss-120b",
           temperature: 1,
           max_completion_tokens: 8192,
@@ -81,6 +156,8 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
         role: "assistant",
         content: "",
       };
+      const assistantMessageId = `assistant-${Date.now()}-${Math.random()}`;
+      optimisticAssistantMessageRef.current = assistantMessageId;
       setMessages((prev) => [...prev, assistantMessage]);
 
       let buffer = "";
@@ -141,17 +218,59 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
           }
         }
       }
+
+      setMessages((currentMessages) => {
+        saveChatHistory(currentMessages, chatId).catch(() => {
+        });
+        return currentMessages;
+      });
+
+      optimisticUserMessageRef.current = null;
+      optimisticAssistantMessageRef.current = null;
     } catch (error) {
-      const errorMessage: Message = {
-        role: "assistant",
-        content: error instanceof Error 
-          ? `Error: ${error.message}` 
-          : "Sorry, I encountered an error. Please try again.",
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => {
+        let rolledBack = [...prev];
+        
+        if (optimisticAssistantMessageRef.current) {
+          const assistantIndex = rolledBack.findIndex(
+            (msg, idx) => idx === rolledBack.length - 1 && msg.role === "assistant" && msg.content === ""
+          );
+          if (assistantIndex !== -1) {
+            rolledBack = rolledBack.slice(0, assistantIndex);
+          }
+          optimisticAssistantMessageRef.current = null;
+        }
+
+        if (optimisticUserMessageRef.current) {
+          const userIndex = rolledBack.findIndex(
+            (msg, idx) => idx === rolledBack.length - 1 && msg.role === "user"
+          );
+          if (userIndex !== -1 && userIndex === rolledBack.length - 1) {
+            rolledBack = rolledBack.slice(0, userIndex);
+          }
+          optimisticUserMessageRef.current = null;
+        }
+
+        const errorMessage: Message = {
+          role: "assistant",
+          content: error instanceof Error 
+            ? `Error: ${error.message}` 
+            : "Sorry, I encountered an error. Please try again.",
+        };
+        return [...rolledBack, errorMessage];
+      });
     } finally {
       setLoading(false);
     }
+  }
+
+  if (initialLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
+        <p className="text-sm text-slate-400 mt-4">Loading chat history...</p>
+      </div>
+    );
   }
 
   return (

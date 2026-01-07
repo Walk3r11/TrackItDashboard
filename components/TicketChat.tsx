@@ -35,6 +35,7 @@ export default function TicketChat({
   const [isClosing, setIsClosing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const tempMessageIdsRef = useRef<Set<string>>(new Set());
 
   const handleClose = () => {
     setIsClosing(true);
@@ -88,6 +89,20 @@ export default function TicketChat({
           setMessages((prev) => {
             const exists = prev.some((m) => m.id === data.message.id);
             if (exists) return prev;
+            
+            const tempIndex = prev.findIndex((m) => 
+              tempMessageIdsRef.current.has(m.id) && 
+              m.content === data.message.content &&
+              Math.abs(new Date(m.created_at).getTime() - new Date(data.message.created_at).getTime()) < 5000
+            );
+            
+            if (tempIndex !== -1) {
+              const updated = [...prev];
+              updated[tempIndex] = data.message;
+              tempMessageIdsRef.current.delete(prev[tempIndex].id);
+              return updated;
+            }
+            
             return [...prev, data.message];
           });
         } else if (data.type === "error") {
@@ -95,10 +110,11 @@ export default function TicketChat({
         } else if (data.type === "connected") {
         }
       } catch (err) {
+        console.error("SSE parse error:", err);
       }
     };
 
-    eventSource.onerror = () => {
+    eventSource.onerror = (err) => {
       if (eventSource.readyState === EventSource.CLOSED || eventSource.readyState === EventSource.CONNECTING) {
         eventSource.close();
         setTimeout(() => {
@@ -130,8 +146,22 @@ export default function TicketChat({
     const text = inputText.trim();
     if (!text || sending) return;
 
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const tempMessage: Message = {
+      id: tempId,
+      ticket_id: ticketId,
+      user_id: userId,
+      sender_type: "support",
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+
+    tempMessageIdsRef.current.add(tempId);
+    setMessages((prev) => [...prev, tempMessage]);
+    setInputText("");
     setSending(true);
     setError(null);
+
     try {
       const res = await fetch(
         `${apiBase}/api/tickets/${ticketId}/messages?supportUserId=${userId}`,
@@ -154,10 +184,20 @@ export default function TicketChat({
 
       const body = await res.json();
       if (body.message) {
-        setMessages((prev) => [...prev, body.message]);
+        setMessages((prev) => {
+          const tempIndex = prev.findIndex((m) => m.id === tempId);
+          if (tempIndex !== -1) {
+            const updated = [...prev];
+            updated[tempIndex] = body.message;
+            tempMessageIdsRef.current.delete(tempId);
+            return updated;
+          }
+          return [...prev, body.message];
+        });
       }
-      setInputText("");
     } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      tempMessageIdsRef.current.delete(tempId);
       setError(err instanceof Error ? err.message : "Failed to send message");
     } finally {
       setSending(false);
