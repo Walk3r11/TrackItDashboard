@@ -80,6 +80,9 @@ export default function TicketChat({
 
     eventSource.onmessage = (event) => {
       try {
+        if (!event.data || event.data.trim() === "" || event.data.startsWith(":")) {
+          return;
+        }
         const data = JSON.parse(event.data);
         if (data.type === "message" && data.message) {
           setMessages((prev) => {
@@ -94,12 +97,14 @@ export default function TicketChat({
     };
 
     eventSource.onerror = (err) => {
-      eventSource.close();
-      setTimeout(() => {
-        if (eventSourceRef.current === eventSource) {
-          startSSE();
-        }
-      }, 3000);
+      if (eventSource.readyState === EventSource.CLOSED) {
+        eventSource.close();
+        setTimeout(() => {
+          if (eventSourceRef.current === eventSource) {
+            startSSE();
+          }
+        }, 1000);
+      }
     };
 
     eventSourceRef.current = eventSource;
