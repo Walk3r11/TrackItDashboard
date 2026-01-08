@@ -41,8 +41,10 @@ export default function TicketChat({
   const [isClosingTicket, setIsClosingTicket] = useState(false);
   const [isOpeningTicket, setIsOpeningTicket] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const tempMessageIdsRef = useRef<Set<string>>(new Set());
+  const processedMessageIdsRef = useRef<Set<string>>(new Set());
 
   const handleClose = () => {
     setIsClosing(true);
@@ -63,7 +65,11 @@ export default function TicketChat({
       );
       if (!res.ok) throw new Error("Failed to load messages");
       const body = await res.json();
-      setMessages(body.messages ?? []);
+      const loadedMessages = body.messages ?? [];
+      setMessages(loadedMessages);
+      loadedMessages.forEach((msg: Message) => {
+        processedMessageIdsRef.current.add(msg.id);
+      });
     } catch (err) {
       setError("Failed to load messages");
     } finally {
@@ -93,13 +99,33 @@ export default function TicketChat({
         }
         const data = JSON.parse(event.data);
         if (data.type === "message" && data.message) {
+          const messageId = data.message.id;
+          
+          if (processedMessageIdsRef.current.has(messageId)) {
+            return;
+          }
+
+          processedMessageIdsRef.current.add(messageId);
+
           setMessages((prev) => {
-            const exists = prev.some((m) => m.id === data.message.id);
-            if (exists) return prev;
+            const existsById = prev.some((m) => m.id === messageId);
+            if (existsById) {
+              return prev;
+            }
+            
+            const duplicateByContent = prev.some((m) => 
+              m.content === data.message.content &&
+              m.sender_type === data.message.sender_type &&
+              Math.abs(new Date(m.created_at).getTime() - new Date(data.message.created_at).getTime()) < 3000
+            );
+            if (duplicateByContent) {
+              return prev;
+            }
             
             const tempIndex = prev.findIndex((m) => 
               tempMessageIdsRef.current.has(m.id) && 
               m.content === data.message.content &&
+              m.sender_type === data.message.sender_type &&
               Math.abs(new Date(m.created_at).getTime() - new Date(data.message.created_at).getTime()) < 5000
             );
             
@@ -143,6 +169,9 @@ export default function TicketChat({
   }, [initialStatus]);
 
   useEffect(() => {
+    processedMessageIdsRef.current.clear();
+    tempMessageIdsRef.current.clear();
+    
     loadMessages();
     startSSE();
     return () => {
@@ -152,9 +181,32 @@ export default function TicketChat({
     };
   }, [loadMessages, startSSE]);
 
+  const scrollToBottom = useCallback((force = false) => {
+    if (messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      
+      if (force || isNearBottom) {
+        setTimeout(() => {
+          if (messagesContainerRef.current) {
+            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+          }
+        }, 100);
+      }
+    }
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    if (!loading && messages.length > 0) {
+      setTimeout(() => {
+        scrollToBottom(true);
+      }, 200);
+    }
+  }, [loading, messages.length, scrollToBottom]);
 
   async function sendMessage() {
     const text = inputText.trim();
@@ -169,12 +221,14 @@ export default function TicketChat({
       content: text,
       created_at: new Date().toISOString(),
     };
-
+    
     tempMessageIdsRef.current.add(tempId);
     setMessages((prev) => [...prev, tempMessage]);
     setInputText("");
     setSending(true);
     setError(null);
+    
+    setTimeout(() => scrollToBottom(true), 50);
 
     try {
       const res = await fetch(
@@ -198,7 +252,16 @@ export default function TicketChat({
 
       const body = await res.json();
       if (body.message) {
+        const messageId = body.message.id;
+        
+        processedMessageIdsRef.current.add(messageId);
+        
         setMessages((prev) => {
+          const alreadyExists = prev.some((m) => m.id === messageId);
+          if (alreadyExists) {
+            return prev;
+          }
+          
           const tempIndex = prev.findIndex((m) => m.id === tempId);
           if (tempIndex !== -1) {
             const updated = [...prev];
@@ -206,6 +269,16 @@ export default function TicketChat({
             tempMessageIdsRef.current.delete(tempId);
             return updated;
           }
+          
+          const duplicateByContent = prev.some((m) => 
+            m.content === body.message.content &&
+            m.sender_type === body.message.sender_type &&
+            Math.abs(new Date(m.created_at).getTime() - new Date(body.message.created_at).getTime()) < 2000
+          );
+          if (duplicateByContent) {
+            return prev;
+          }
+          
           return [...prev, body.message];
         });
       }
@@ -336,7 +409,7 @@ export default function TicketChat({
             <p className="text-sm text-slate-400 mt-1">Ticket #{ticketId.slice(0, 8)}</p>
           </div>
           <div className="flex items-center gap-2">
-            {ticketStatus === "pending" ? (
+            {ticketStatus === "pending" && (
               <button
                 onClick={openTicket}
                 disabled={isOpeningTicket}
@@ -344,15 +417,7 @@ export default function TicketChat({
               >
                 {isOpeningTicket ? "Opening..." : "Open Ticket"}
               </button>
-            ) : ticketStatus === "open" ? (
-              <button
-                onClick={closeTicket}
-                disabled={isClosingTicket}
-                className="px-4 py-2 rounded-xl bg-slate-700 hover:bg-rose-600/80 text-slate-200 hover:text-white text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-600/50 hover:border-rose-500/50"
-              >
-                {isClosingTicket ? "Closing..." : "Close Ticket"}
-              </button>
-            ) : null}
+            )}
             <button
               onClick={handleClose}
               className="p-2 rounded-xl hover:bg-white/10 transition-all duration-200 hover:scale-110 active:scale-95"
@@ -362,7 +427,7 @@ export default function TicketChat({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 scroll-accent">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 scroll-accent">
           {loading ? (
             <div className="text-center text-slate-400 py-8">Loading messages...</div>
           ) : messages.length === 0 ? (

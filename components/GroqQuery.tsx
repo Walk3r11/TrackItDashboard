@@ -43,7 +43,7 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
 
       const finalChatId = chatIdToUse || crypto.randomUUID();
       
-      await fetch(`${apiBase}/api/chat/history`, {
+      await fetch(`${apiBase}/api/chat/history?userId=${userId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -62,41 +62,26 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
     } catch (error) {
       console.error("Failed to save chat history:", error);
     }
-  }, [apiBase]);
-
-  const loadChatHistory = useCallback(async () => {
-    try {
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("auth-token="))
-        ?.split("=")[1];
-
-      const response = await fetch(`${apiBase}/api/chat/history?userId=${userId}`, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: "include",
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
-          setMessages(data.messages);
-          if (data.chatId) {
-            setChatId(data.chatId);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load chat history:", error);
-    } finally {
-      setInitialLoading(false);
-    }
   }, [apiBase, userId]);
 
+  const loadChatHistory = useCallback(async () => {
+    // Don't load user's chat history - support should have a fresh AI assistant
+    setInitialLoading(false);
+    setMessages([]);
+    setChatId(null);
+  }, []);
+
   useEffect(() => {
+    // Reset state when userId changes (tab switch)
+    if (!userId) {
+      setInitialLoading(false);
+      return;
+    }
+    setMessages([]);
+    setChatId(null);
+    setInitialLoading(true);
     loadChatHistory();
-  }, [loadChatHistory]);
+  }, [loadChatHistory, userId]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -142,6 +127,9 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "Unknown error");
+        if (response.status === 401) {
+          throw new Error("Unauthorized. Please refresh the page and try again.");
+        }
         throw new Error(`Failed to get response: ${errorText}`);
       }
 
@@ -254,7 +242,9 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
         const errorMessage: Message = {
           role: "assistant",
           content: error instanceof Error 
-            ? `Error: ${error.message}` 
+            ? (error.message.includes("Unauthorized") || error.message.includes("401"))
+              ? "Authentication error. Please refresh the page and try again."
+              : `Error: ${error.message}`
             : "Sorry, I encountered an error. Please try again.",
         };
         return [...rolledBack, errorMessage];
@@ -266,18 +256,27 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
 
   if (initialLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full">
+      <div className="flex flex-col items-center justify-center h-full w-full min-h-[500px]">
         <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
         <p className="text-sm text-slate-400 mt-4">Loading chat history...</p>
       </div>
     );
   }
 
+  if (!userId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full w-full min-h-[500px]">
+        <Bot className="h-12 w-12 text-cyan-300" />
+        <p className="text-sm text-slate-400 mt-4">No user selected</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto space-y-4 p-4 scroll-accent">
+    <div className="flex flex-col h-full w-full min-h-[500px]">
+      <div className="flex-1 overflow-y-auto space-y-4 p-4 scroll-accent min-h-[400px]">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+          <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center space-y-4 py-20">
             <Bot className="h-12 w-12 text-cyan-300" />
             <div>
               <p className="text-lg font-semibold text-slate-200">

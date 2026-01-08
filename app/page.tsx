@@ -515,11 +515,8 @@ export default function Page() {
               <button
                 data-tab="groq"
                 onClick={() => {
-                  setIsTabTransitioning(true);
-                  setTimeout(() => {
-                    setActiveTab("groq");
-                    setIsTabTransitioning(false);
-                  }, 150);
+                  setActiveTab("groq");
+                  setIsTabTransitioning(false);
                 }}
                 className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "groq"
                     ? "text-cyan-300 border-b-2 border-cyan-300"
@@ -691,7 +688,15 @@ export default function Page() {
                           }
                           setSelectedTicket({ id: ticket.id, subject: ticket.subject, status: ticket.status });
                         }}
-                        className="rounded-2xl bg-gradient-to-r from-slate-800/60 to-slate-900/60 border border-white/10 px-4 py-3 flex items-center justify-between cursor-pointer hover:from-slate-700/60 hover:to-slate-800/60 hover:border-cyan-400/30 transition-all duration-200 hover:shadow-lg hover:shadow-cyan-500/10"
+                        className={`rounded-2xl bg-gradient-to-r from-slate-800/60 to-slate-900/60 border px-4 py-3 flex items-center justify-between cursor-pointer hover:from-slate-700/60 hover:to-slate-800/60 transition-all duration-200 hover:shadow-lg ${
+                          ticketStatus !== "all" && ticket.status === ticketStatus
+                            ? ticketStatus === "open"
+                              ? "border-cyan-400/50 shadow-lg shadow-cyan-500/20"
+                              : ticketStatus === "pending"
+                              ? "border-amber-400/50 shadow-lg shadow-amber-500/20"
+                              : "border-slate-400/50 shadow-lg shadow-slate-500/20"
+                            : "border-white/10 hover:border-cyan-400/30 hover:shadow-cyan-500/10"
+                        }`}
                       >
                         <div className="flex-1">
                           <p className="font-semibold text-slate-100">{ticket.subject}</p>
@@ -725,9 +730,9 @@ export default function Page() {
               </div>
             )}
 
-            {activeTab === "groq" && (
-              <div className={`h-[600px] transition-opacity duration-300 ${isTabTransitioning ? "opacity-0" : "opacity-100"}`}>
-                <GroqQuery userId={user.id} apiBase={apiBase} />
+            {activeTab === "groq" && user && (
+              <div className="h-[600px] flex flex-col w-full overflow-hidden relative">
+                <GroqQuery key={`groq-support-${user.id}`} userId={user.id} apiBase={apiBase} />
               </div>
             )}
 
@@ -775,7 +780,15 @@ export default function Page() {
                         setSelectedTicket({ id: ticket.id, subject: ticket.subject, status: ticket.status });
                       }
                     }}
-                    className="rounded-2xl bg-slate/50 border border-white/5 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
+                    className={`rounded-2xl bg-slate/50 border px-4 py-3 flex items-center justify-between cursor-pointer transition-colors ${
+                      ticketStatus !== "all" && ticket.status === ticketStatus
+                        ? ticketStatus === "open"
+                          ? "border-cyan-400/50 bg-cyan-500/10 hover:bg-cyan-500/15"
+                          : ticketStatus === "pending"
+                          ? "border-amber-400/50 bg-amber-500/10 hover:bg-amber-500/15"
+                          : "border-slate-400/50 bg-slate-500/10 hover:bg-slate-500/15"
+                        : "border-white/5 hover:bg-white/5"
+                    }`}
                   >
                     <div>
                       <p className="font-medium">{ticket.subject}</p>
