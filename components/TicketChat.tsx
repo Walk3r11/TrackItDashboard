@@ -39,6 +39,7 @@ export default function TicketChat({
   const [isClosing, setIsClosing] = useState(false);
   const [ticketStatus, setTicketStatus] = useState<"open" | "pending" | "closed">(initialStatus);
   const [isClosingTicket, setIsClosingTicket] = useState(false);
+  const [isOpeningTicket, setIsOpeningTicket] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const tempMessageIdsRef = useRef<Set<string>>(new Set());
@@ -228,6 +229,47 @@ export default function TicketChat({
     }).format(date);
   };
 
+  async function openTicket() {
+    if (isOpeningTicket || ticketStatus !== "pending") return;
+    
+    setIsOpeningTicket(true);
+    setError(null);
+    
+    try {
+      const token = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("auth-token="))
+        ?.split("=")[1];
+
+      const res = await fetch(
+        `${apiBase}/api/tickets/${ticketId}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            status: "open",
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error || "Failed to open ticket");
+      }
+
+      setTicketStatus("open");
+      onStatusChange("open");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to open ticket");
+    } finally {
+      setIsOpeningTicket(false);
+    }
+  }
+
   async function closeTicket() {
     if (isClosingTicket || ticketStatus === "closed") return;
     
@@ -294,7 +336,15 @@ export default function TicketChat({
             <p className="text-sm text-slate-400 mt-1">Ticket #{ticketId.slice(0, 8)}</p>
           </div>
           <div className="flex items-center gap-2">
-            {ticketStatus !== "closed" && (
+            {ticketStatus === "pending" ? (
+              <button
+                onClick={openTicket}
+                disabled={isOpeningTicket}
+                className="px-4 py-2 rounded-xl bg-slate-700 hover:bg-cyan-600/80 text-slate-200 hover:text-white text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-600/50 hover:border-cyan-500/50"
+              >
+                {isOpeningTicket ? "Opening..." : "Open Ticket"}
+              </button>
+            ) : ticketStatus === "open" ? (
               <button
                 onClick={closeTicket}
                 disabled={isClosingTicket}
@@ -302,7 +352,7 @@ export default function TicketChat({
               >
                 {isClosingTicket ? "Closing..." : "Close Ticket"}
               </button>
-            )}
+            ) : null}
             <button
               onClick={handleClose}
               className="p-2 rounded-xl hover:bg-white/10 transition-all duration-200 hover:scale-110 active:scale-95"
@@ -365,8 +415,8 @@ export default function TicketChat({
               <div className="flex-1">
                 <p className="text-sm font-medium text-amber-300">
                   {ticketStatus === "closed" 
-                    ? "This ticket is closed. Only support can reopen it." 
-                    : "This ticket is pending. Only support can open it for messaging."}
+                    ? "This ticket is closed." 
+                    : "This ticket is pending. Use the 'Open Ticket' button above to enable messaging."}
                 </p>
               </div>
             </div>
