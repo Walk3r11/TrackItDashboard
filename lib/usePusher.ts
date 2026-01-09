@@ -85,8 +85,13 @@ export function usePusher({
       });
 
       pusher.connection.bind("error", (err: any) => {
-        setError("Pusher connection error");
-        onError?.("Connection error");
+        console.error("[Pusher] Connection error:", err);
+        setError(`Pusher connection error: ${err?.error?.data?.message || err?.message || "Unknown error"}`);
+        onError?.(`Connection error: ${err?.error?.data?.message || err?.message || "Unknown error"}`);
+      });
+
+      pusher.connection.bind("state_change", (states: any) => {
+        console.log("[Pusher] State change:", states.previous, "->", states.current);
       });
 
       let channelName = "";
@@ -103,9 +108,10 @@ export function usePusher({
           setIsConnected(true);
         });
 
-        channel.bind("pusher:subscription_error", (status: number) => {
-          setError(`Subscription failed: ${status}`);
-          onError?.(`Subscription failed`);
+        channel.bind("pusher:subscription_error", (status: number, data?: any) => {
+          console.error("[Pusher] Subscription error:", status, data);
+          setError(`Subscription failed: ${status} - ${data?.error || "Unknown error"}`);
+          onError?.(`Subscription failed: ${status}`);
         });
 
         if (streamType === "tickets") {
