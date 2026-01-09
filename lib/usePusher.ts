@@ -73,10 +73,51 @@ export function usePusher({
         },
       });
 
+      let channelName = "";
+      if (streamType === "tickets" || streamType === "transactions") {
+        channelName = `private-user-${userId}`;
+      } else if (streamType === "ticket-messages" && ticketId) {
+        channelName = `private-ticket-${ticketId}`;
+      }
+
       pusher.connection.bind("connected", () => {
-        setIsConnected(true);
-        setError(null);
-        onConnect?.();
+        if (channelName) {
+          const channel = pusher.subscribe(channelName);
+
+          channel.bind("pusher:subscription_succeeded", () => {
+            setIsConnected(true);
+            setError(null);
+            onConnect?.();
+          });
+
+          channel.bind("pusher:subscription_error", (status: number, data?: any) => {
+            setError(`Subscription failed: ${status} - ${data?.error || "Unknown error"}`);
+            onError?.(`Subscription failed: ${status}`);
+          });
+
+          if (streamType === "tickets") {
+            channel.bind("ticket", (data: any) => {
+              onMessage?.({ type: "ticket", data });
+            });
+          } else if (streamType === "ticket-messages") {
+            channel.bind("message", (data: any) => {
+              onMessage?.(data);
+            });
+            channel.bind("status", (data: any) => {
+              onMessage?.(data);
+            });
+          } else if (streamType === "transactions") {
+            channel.bind("transaction", (data: any) => {
+              onMessage?.(data);
+            });
+          }
+
+          channelRef.current = channel;
+        } else {
+          setIsConnected(true);
+          setError(null);
+          onConnect?.();
+        }
       });
 
       pusher.connection.bind("disconnected", () => {
@@ -85,31 +126,20 @@ export function usePusher({
       });
 
       pusher.connection.bind("error", (err: any) => {
-        console.error("[Pusher] Connection error:", err);
         setError(`Pusher connection error: ${err?.error?.data?.message || err?.message || "Unknown error"}`);
         onError?.(`Connection error: ${err?.error?.data?.message || err?.message || "Unknown error"}`);
       });
 
-      pusher.connection.bind("state_change", (states: any) => {
-        console.log("[Pusher] State change:", states.previous, "->", states.current);
-      });
-
-      let channelName = "";
-      if (streamType === "tickets" || streamType === "transactions") {
-        channelName = `private-user-${userId}`;
-      } else if (streamType === "ticket-messages" && ticketId) {
-        channelName = `private-ticket-${ticketId}`;
-      }
-
-      if (channelName) {
+      if (channelName && pusher.connection.state === "connected") {
         const channel = pusher.subscribe(channelName);
 
         channel.bind("pusher:subscription_succeeded", () => {
           setIsConnected(true);
+          setError(null);
+          onConnect?.();
         });
 
         channel.bind("pusher:subscription_error", (status: number, data?: any) => {
-          console.error("[Pusher] Subscription error:", status, data);
           setError(`Subscription failed: ${status} - ${data?.error || "Unknown error"}`);
           onError?.(`Subscription failed: ${status}`);
         });
