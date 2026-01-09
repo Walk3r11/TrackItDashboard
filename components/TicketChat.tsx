@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Send, Lock } from "lucide-react";
+import { usePusher } from "@/lib/usePusher";
 
 type Message = {
   id: string;
@@ -42,9 +43,12 @@ export default function TicketChat({
   const [isOpeningTicket, setIsOpeningTicket] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
   const tempMessageIdsRef = useRef<Set<string>>(new Set());
   const processedMessageIdsRef = useRef<Set<string>>(new Set());
+  
+  const token = typeof document !== "undefined" 
+    ? document.cookie.split("; ").find((row) => row.startsWith("auth-token="))?.split("=")[1] 
+    : "";
 
   const handleClose = () => {
     setIsClosing(true);
@@ -77,92 +81,63 @@ export default function TicketChat({
     }
   }, [apiBase, ticketId, userId]);
 
-  const startSSE = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
+  const handlePusherMessage = useCallback((message: any) => {
+    if (message.type === "message" && message.message) {
+      const messageId = message.message.id;
+      
+      if (processedMessageIdsRef.current.has(messageId)) {
+        return;
+      }
+
+      processedMessageIdsRef.current.add(messageId);
+
+      setMessages((prev) => {
+        const existsById = prev.some((m) => m.id === messageId);
+        if (existsById) {
+          return prev;
+        }
+        
+        const duplicateByContent = prev.some((m) => 
+          m.content === message.message.content &&
+          m.sender_type === message.message.sender_type &&
+          Math.abs(new Date(m.created_at).getTime() - new Date(message.message.created_at).getTime()) < 3000
+        );
+        if (duplicateByContent) {
+          return prev;
+        }
+        
+        const tempIndex = prev.findIndex((m) => 
+          tempMessageIdsRef.current.has(m.id) && 
+          m.content === message.message.content &&
+          m.sender_type === message.message.sender_type &&
+          Math.abs(new Date(m.created_at).getTime() - new Date(message.message.created_at).getTime()) < 5000
+        );
+        
+        if (tempIndex !== -1) {
+          const updated = [...prev];
+          updated[tempIndex] = message.message;
+          tempMessageIdsRef.current.delete(prev[tempIndex].id);
+          return updated;
+        }
+        
+        return [...prev, message.message];
+      });
+    } else if (message.type === "status" && message.status) {
+      setTicketStatus(message.status);
+      onStatusChange(message.status);
     }
+  }, [onStatusChange]);
 
-    const token = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("auth-token="))
-      ?.split("=")[1];
-
-    const url = `${apiBase}/api/tickets/${ticketId}/messages/stream?supportUserId=${userId}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
-    const eventSource = new EventSource(url, {
-      withCredentials: true,
-    });
-
-    eventSource.onmessage = (event) => {
-      try {
-        if (!event.data || event.data.trim() === "" || event.data.startsWith(":")) {
-          return;
-        }
-        const data = JSON.parse(event.data);
-        if (data.type === "message" && data.message) {
-          const messageId = data.message.id;
-          
-          if (processedMessageIdsRef.current.has(messageId)) {
-            return;
-          }
-
-          processedMessageIdsRef.current.add(messageId);
-
-          setMessages((prev) => {
-            const existsById = prev.some((m) => m.id === messageId);
-            if (existsById) {
-              return prev;
-            }
-            
-            const duplicateByContent = prev.some((m) => 
-              m.content === data.message.content &&
-              m.sender_type === data.message.sender_type &&
-              Math.abs(new Date(m.created_at).getTime() - new Date(data.message.created_at).getTime()) < 3000
-            );
-            if (duplicateByContent) {
-              return prev;
-            }
-            
-            const tempIndex = prev.findIndex((m) => 
-              tempMessageIdsRef.current.has(m.id) && 
-              m.content === data.message.content &&
-              m.sender_type === data.message.sender_type &&
-              Math.abs(new Date(m.created_at).getTime() - new Date(data.message.created_at).getTime()) < 5000
-            );
-            
-            if (tempIndex !== -1) {
-              const updated = [...prev];
-              updated[tempIndex] = data.message;
-              tempMessageIdsRef.current.delete(prev[tempIndex].id);
-              return updated;
-            }
-            
-            return [...prev, data.message];
-          });
-        } else if (data.type === "status" && data.status) {
-          setTicketStatus(data.status);
-          onStatusChange(data.status);
-        } else if (data.type === "error") {
-          console.error("SSE error:", data.error);
-        } else if (data.type === "connected") {
-        }
-      } catch (err) {
-        console.error("SSE parse error:", err);
-      }
-    };
-
-    eventSource.onerror = (err) => {
-      if (eventSource.readyState === EventSource.CLOSED || eventSource.readyState === EventSource.CONNECTING) {
-        eventSource.close();
-        setTimeout(() => {
-          if (eventSourceRef.current === eventSource) {
-            startSSE();
-          }
-        }, 500);
-      }
-    };
-
-    eventSourceRef.current = eventSource;
-  }, [apiBase, ticketId, userId, onStatusChange]);
+  usePusher({
+    apiBase,
+    token: token || "",
+    userId,
+    supportUserId: userId,
+    streamType: "ticket-messages",
+    ticketId,
+    onMessage: handlePusherMessage,
+    onError: (err) => console.error("Pusher error:", err),
+  });
 
   useEffect(() => {
     setTicketStatus(initialStatus);
@@ -171,15 +146,8 @@ export default function TicketChat({
   useEffect(() => {
     processedMessageIdsRef.current.clear();
     tempMessageIdsRef.current.clear();
-    
     loadMessages();
-    startSSE();
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-    };
-  }, [loadMessages, startSSE]);
+  }, [loadMessages]);
 
   const scrollToBottom = useCallback((force = false) => {
     if (messagesContainerRef.current) {
