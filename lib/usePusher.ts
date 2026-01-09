@@ -39,6 +39,17 @@ export function usePusher({
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<any>(null);
   const isActiveRef = useRef(true);
+  const onMessageRef = useRef(onMessage);
+  const onErrorRef = useRef(onError);
+  const onConnectRef = useRef(onConnect);
+  const onDisconnectRef = useRef(onDisconnect);
+
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+    onErrorRef.current = onError;
+    onConnectRef.current = onConnect;
+    onDisconnectRef.current = onDisconnect;
+  }, [onMessage, onError, onConnect, onDisconnect]);
 
   const PUSHER_KEY = process.env.NEXT_PUBLIC_PUSHER_KEY || "";
   const PUSHER_CLUSTER = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "eu";
@@ -46,13 +57,13 @@ export function usePusher({
   const connect = useCallback(() => {
     if (!isActiveRef.current || !PUSHER_KEY) {
       setError("Pusher not configured - missing NEXT_PUBLIC_PUSHER_KEY");
-      onError?.("Pusher not configured");
+      onErrorRef.current?.("Pusher not configured");
       return;
     }
 
     if (!token) {
       setError("No authentication token");
-      onError?.("No authentication token");
+      onErrorRef.current?.("No authentication token");
       return;
     }
 
@@ -80,96 +91,78 @@ export function usePusher({
         channelName = `private-ticket-${ticketId}`;
       }
 
-      pusher.connection.bind("connected", () => {
-        if (channelName) {
-          const channel = pusher.subscribe(channelName);
-
-          channel.bind("pusher:subscription_succeeded", () => {
-            setIsConnected(true);
-            setError(null);
-            onConnect?.();
-          });
-
-          channel.bind("pusher:subscription_error", (status: number, data?: any) => {
-            setError(`Subscription failed: ${status} - ${data?.error || "Unknown error"}`);
-            onError?.(`Subscription failed: ${status}`);
-          });
-
-          if (streamType === "tickets") {
-            channel.bind("ticket", (data: any) => {
-              onMessage?.({ type: "ticket", data });
-            });
-          } else if (streamType === "ticket-messages") {
-            channel.bind("message", (data: any) => {
-              onMessage?.(data);
-            });
-            channel.bind("status", (data: any) => {
-              onMessage?.(data);
-            });
-          } else if (streamType === "transactions") {
-            channel.bind("transaction", (data: any) => {
-              onMessage?.(data);
-            });
-          }
-
-          channelRef.current = channel;
-        } else {
+      const setupChannel = () => {
+        if (!channelName) {
           setIsConnected(true);
           setError(null);
-          onConnect?.();
+          onConnectRef.current?.();
+          return;
         }
-      });
 
-      pusher.connection.bind("disconnected", () => {
-        setIsConnected(false);
-        onDisconnect?.();
-      });
+        if (channelRef.current) {
+          return;
+        }
 
-      pusher.connection.bind("error", (err: any) => {
-        setError(`Pusher connection error: ${err?.error?.data?.message || err?.message || "Unknown error"}`);
-        onError?.(`Connection error: ${err?.error?.data?.message || err?.message || "Unknown error"}`);
-      });
-
-      if (channelName && pusher.connection.state === "connected") {
         const channel = pusher.subscribe(channelName);
 
         channel.bind("pusher:subscription_succeeded", () => {
           setIsConnected(true);
           setError(null);
-          onConnect?.();
+          onConnectRef.current?.();
         });
 
         channel.bind("pusher:subscription_error", (status: number, data?: any) => {
           setError(`Subscription failed: ${status} - ${data?.error || "Unknown error"}`);
-          onError?.(`Subscription failed: ${status}`);
+          onErrorRef.current?.(`Subscription failed: ${status}`);
         });
 
         if (streamType === "tickets") {
           channel.bind("ticket", (data: any) => {
-            onMessage?.({ type: "ticket", data });
+            onMessageRef.current?.({ type: "ticket", data });
           });
         } else if (streamType === "ticket-messages") {
           channel.bind("message", (data: any) => {
-            onMessage?.(data);
+            onMessageRef.current?.(data);
           });
           channel.bind("status", (data: any) => {
-            onMessage?.(data);
+            onMessageRef.current?.(data);
           });
         } else if (streamType === "transactions") {
           channel.bind("transaction", (data: any) => {
-            onMessage?.(data);
+            onMessageRef.current?.(data);
           });
         }
 
         channelRef.current = channel;
+      };
+
+      const handleConnected = () => {
+        if (!channelRef.current) {
+          setupChannel();
+        }
+      };
+
+      pusher.connection.bind("connected", handleConnected);
+      pusher.connection.bind("disconnected", () => {
+        setIsConnected(false);
+        channelRef.current = null;
+        onDisconnectRef.current?.();
+      });
+      pusher.connection.bind("error", (err: any) => {
+        setError(`Pusher connection error: ${err?.error?.data?.message || err?.message || "Unknown error"}`);
+        onErrorRef.current?.(`Connection error: ${err?.error?.data?.message || err?.message || "Unknown error"}`);
+      });
+
+      if (pusher.connection.state === "connected") {
+        handleConnected();
       }
 
       pusherRef.current = pusher;
     } catch (err) {
       setError("Failed to create Pusher connection");
-      onError?.("Failed to create connection");
+      onErrorRef.current?.("Failed to create connection");
     }
-  }, [apiBase, token, userId, supportUserId, streamType, ticketId, PUSHER_KEY, PUSHER_CLUSTER, onMessage, onError, onConnect, onDisconnect]);
+  }, [apiBase, token, userId, supportUserId, streamType, ticketId, PUSHER_KEY, PUSHER_CLUSTER]);
 
   const disconnect = useCallback(() => {
     isActiveRef.current = false;
@@ -182,8 +175,8 @@ export function usePusher({
       pusherRef.current = null;
     }
     setIsConnected(false);
-    onDisconnect?.();
-  }, [onDisconnect]);
+    onDisconnectRef.current?.();
+  }, []);
 
   useEffect(() => {
     isActiveRef.current = true;
@@ -191,7 +184,7 @@ export function usePusher({
     return () => {
       disconnect();
     };
-  }, [connect, disconnect]);
+  }, [apiBase, token, userId, supportUserId, streamType, ticketId]);
 
   return { isConnected, error, reconnect: connect, disconnect };
 }
