@@ -19,7 +19,7 @@ export default function LoginClient() {
     setState("loading");
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "https://trackit-dashboard-beryl.vercel.app";
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "https://backend-production-0eac.up.railway.app";
       const response = await fetch(`${apiBase}/api/auth/dashboard/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -117,4 +117,3 @@ export default function LoginClient() {
     </main>
   );
 }
-

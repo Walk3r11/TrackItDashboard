@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 
 type FormState = "idle" | "loading" | "success" | "error";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "https://trackit-dashboard-beryl.vercel.app";
+const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "https://backend-production-0eac.up.railway.app";
 
 export default function ResetPasswordClient() {
   const searchParams = useSearchParams();
