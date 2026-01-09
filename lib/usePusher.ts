@@ -68,11 +68,28 @@ export function usePusher({
     }
 
     if (pusherRef.current) {
-      pusherRef.current.disconnect();
+      try {
+        const state = pusherRef.current.connection.state;
+        if (state === "connected" || state === "connecting") {
+          pusherRef.current.disconnect();
+        }
+      } catch (err) {
+      }
     }
 
     try {
       const authEndpoint = `${apiBase}/api/pusher/auth?token=${encodeURIComponent(token)}${supportUserId ? `&supportUserId=${encodeURIComponent(supportUserId)}` : ""}`;
+      
+      const originalError = console.error;
+      const errorFilter = (...args: any[]) => {
+        const message = args.join(" ").toLowerCase();
+        if (message.includes("websocket is closed before the connection is established") ||
+            message.includes("connection closed")) {
+          return;
+        }
+        originalError.apply(console, args);
+      };
+      console.error = errorFilter;
       
       const pusher = new Pusher(PUSHER_KEY, {
         cluster: PUSHER_CLUSTER,
@@ -82,7 +99,12 @@ export function usePusher({
             Authorization: `Bearer ${token}`,
           },
         },
+        enabledTransports: ['ws', 'wss'],
       });
+      
+      setTimeout(() => {
+        console.error = originalError;
+      }, 2000);
 
       let channelName = "";
       if (streamType === "tickets" || streamType === "transactions") {
@@ -110,7 +132,7 @@ export function usePusher({
           setError(null);
           onConnectRef.current?.();
         });
-
+        
         channel.bind("pusher:subscription_error", (status: number, data?: any) => {
           setError(`Subscription failed: ${status} - ${data?.error || "Unknown error"}`);
           onErrorRef.current?.(`Subscription failed: ${status}`);
@@ -122,10 +144,14 @@ export function usePusher({
           });
         } else if (streamType === "ticket-messages") {
           channel.bind("message", (data: any) => {
-            onMessageRef.current?.(data);
+            if (onMessageRef.current) {
+              onMessageRef.current(data);
+            }
           });
           channel.bind("status", (data: any) => {
-            onMessageRef.current?.(data);
+            if (onMessageRef.current) {
+              onMessageRef.current(data);
+            }
           });
         } else if (streamType === "transactions") {
           channel.bind("transaction", (data: any) => {
@@ -149,8 +175,16 @@ export function usePusher({
         onDisconnectRef.current?.();
       });
       pusher.connection.bind("error", (err: any) => {
-        setError(`Pusher connection error: ${err?.error?.data?.message || err?.message || "Unknown error"}`);
-        onErrorRef.current?.(`Connection error: ${err?.error?.data?.message || err?.message || "Unknown error"}`);
+        if (isActiveRef.current) {
+          const errorMsg = err?.error?.data?.message || err?.message || err?.error?.message || "Unknown error";
+          const errorString = String(errorMsg).toLowerCase();
+          if (!errorString.includes("websocket is closed") && 
+              !errorString.includes("before the connection is established") &&
+              !errorString.includes("connection closed")) {
+            setError(`Pusher connection error: ${errorMsg}`);
+            onErrorRef.current?.(`Connection error: ${errorMsg}`);
+          }
+        }
       });
 
       if (pusher.connection.state === "connected") {
@@ -167,11 +201,20 @@ export function usePusher({
   const disconnect = useCallback(() => {
     isActiveRef.current = false;
     if (channelRef.current) {
-      pusherRef.current?.unsubscribe(channelRef.current.name);
+      try {
+        pusherRef.current?.unsubscribe(channelRef.current.name);
+      } catch (err) {
+      }
       channelRef.current = null;
     }
     if (pusherRef.current) {
-      pusherRef.current.disconnect();
+      try {
+        const state = pusherRef.current.connection.state;
+        if (state === "connected" || state === "connecting") {
+          pusherRef.current.disconnect();
+        }
+      } catch (err) {
+      }
       pusherRef.current = null;
     }
     setIsConnected(false);
@@ -181,6 +224,7 @@ export function usePusher({
   useEffect(() => {
     isActiveRef.current = true;
     connect();
+    
     return () => {
       disconnect();
     };

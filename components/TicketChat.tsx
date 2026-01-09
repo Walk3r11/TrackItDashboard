@@ -81,6 +81,21 @@ export default function TicketChat({
     }
   }, [apiBase, ticketId, userId]);
 
+  const scrollToBottom = useCallback((force = false) => {
+    if (messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      
+      if (force || isNearBottom) {
+        setTimeout(() => {
+          if (messagesContainerRef.current) {
+            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+          }
+        }, 100);
+      }
+    }
+  }, []);
+
   const handlePusherMessage = useCallback((message: any) => {
     if (message.type === "message" && message.message) {
       const messageId = message.message.id;
@@ -98,9 +113,11 @@ export default function TicketChat({
         }
         
         const duplicateByContent = prev.some((m) => 
-          m.content === message.message.content &&
-          m.sender_type === message.message.sender_type &&
-          Math.abs(new Date(m.created_at).getTime() - new Date(message.message.created_at).getTime()) < 3000
+          m.id === messageId || (
+            m.content === message.message.content &&
+            m.sender_type === message.message.sender_type &&
+            Math.abs(new Date(m.created_at).getTime() - new Date(message.message.created_at).getTime()) < 2000
+          )
         );
         if (duplicateByContent) {
           return prev;
@@ -122,11 +139,13 @@ export default function TicketChat({
         
         return [...prev, message.message];
       });
+      
+      setTimeout(() => scrollToBottom(true), 50);
     } else if (message.type === "status" && message.status) {
       setTicketStatus(message.status);
       onStatusChange(message.status);
     }
-  }, [onStatusChange]);
+  }, [onStatusChange, scrollToBottom]);
 
   usePusher({
     apiBase,
@@ -151,21 +170,6 @@ export default function TicketChat({
     tempMessageIdsRef.current.clear();
     loadMessages();
   }, [loadMessages]);
-
-  const scrollToBottom = useCallback((force = false) => {
-    if (messagesContainerRef.current) {
-      const container = messagesContainerRef.current;
-      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-      
-      if (force || isNearBottom) {
-        setTimeout(() => {
-          if (messagesContainerRef.current) {
-            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-          }
-        }, 100);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     scrollToBottom();
