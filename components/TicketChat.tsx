@@ -136,7 +136,10 @@ export default function TicketChat({
     streamType: "ticket-messages",
     ticketId,
     onMessage: handlePusherMessage,
-    onError: (err) => console.error("Pusher error:", err),
+    onError: (err) => {
+      console.error("Pusher error:", err);
+      setError(`Connection error: ${err}`);
+    },
   });
 
   useEffect(() => {

@@ -45,7 +45,14 @@ export function usePusher({
 
   const connect = useCallback(() => {
     if (!isActiveRef.current || !PUSHER_KEY) {
-      setError("Pusher not configured");
+      setError("Pusher not configured - missing NEXT_PUBLIC_PUSHER_KEY");
+      onError?.("Pusher not configured");
+      return;
+    }
+
+    if (!token) {
+      setError("No authentication token");
+      onError?.("No authentication token");
       return;
     }
 
@@ -54,9 +61,11 @@ export function usePusher({
     }
 
     try {
+      const authEndpoint = `${apiBase}/api/pusher/auth?token=${encodeURIComponent(token)}${supportUserId ? `&supportUserId=${encodeURIComponent(supportUserId)}` : ""}`;
+      
       const pusher = new Pusher(PUSHER_KEY, {
         cluster: PUSHER_CLUSTER,
-        authEndpoint: `${apiBase}/api/pusher/auth?token=${encodeURIComponent(token)}${supportUserId ? `&supportUserId=${supportUserId}` : ""}`,
+        authEndpoint: authEndpoint,
         auth: {
           headers: {
             Authorization: `Bearer ${token}`,
