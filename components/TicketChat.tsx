@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Send, Lock } from "lucide-react";
-import { usePusher } from "@/lib/usePusher";
+import { useWebSocket } from "@/lib/useWebSocket";
 
 type Message = {
   id: string;
@@ -96,7 +96,7 @@ export default function TicketChat({
     }
   }, []);
 
-  const handlePusherMessage = useCallback((message: any) => {
+  const handleWebSocketMessage = useCallback((message: any) => {
     if (message.type === "message" && message.message) {
       const messageId = message.message.id;
       
@@ -147,16 +147,15 @@ export default function TicketChat({
     }
   }, [onStatusChange, scrollToBottom]);
 
-  usePusher({
+  useWebSocket({
     apiBase,
     token: token || "",
     userId,
     supportUserId: userId,
     streamType: "ticket-messages",
     ticketId,
-    onMessage: handlePusherMessage,
+    onMessage: handleWebSocketMessage,
     onError: (err) => {
-      console.error("Pusher error:", err);
       setError(`Connection error: ${err}`);
     },
   });

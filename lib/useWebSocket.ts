@@ -2,26 +2,26 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 
-type SSEMessage = {
+type WebSocketMessage = {
   type: string;
   data?: any;
   error?: string;
 };
 
-type UseSSEOptions = {
+type UseWebSocketOptions = {
   apiBase: string;
-  token?: string;
+  token: string;
   userId?: string;
   supportUserId?: string;
   streamType: "tickets" | "ticket-messages" | "transactions";
   ticketId?: string;
-  onMessage?: (message: SSEMessage) => void;
+  onMessage?: (message: WebSocketMessage) => void;
   onError?: (error: string) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
 };
 
-export function useSSE({
+export function useWebSocket({
   apiBase,
   token,
   userId,
@@ -32,100 +32,104 @@ export function useSSE({
   onError,
   onConnect,
   onDisconnect,
-}: UseSSEOptions) {
+}: UseWebSocketOptions) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const isActiveRef = useRef(true);
   const maxReconnectAttempts = 10;
   const reconnectDelay = 1000;
-  const isActiveRef = useRef(true);
-
-  const buildURL = useCallback(() => {
-    let url = "";
-    if (streamType === "tickets") {
-      url = `${apiBase}/api/tickets/stream?userId=${userId}`;
-    } else if (streamType === "ticket-messages" && ticketId) {
-      url = `${apiBase}/api/tickets/${ticketId}/messages/stream`;
-      if (supportUserId) {
-        url += `?supportUserId=${supportUserId}`;
-      }
-    } else if (streamType === "transactions") {
-      url = `${apiBase}/api/transactions/stream?userId=${userId}`;
-    }
-    if (token && !url.includes("token=")) {
-      url += url.includes("?") ? `&token=${encodeURIComponent(token)}` : `?token=${encodeURIComponent(token)}`;
-    }
-    return url;
-  }, [apiBase, userId, supportUserId, streamType, ticketId, token]);
 
   const connect = useCallback(() => {
-    if (!isActiveRef.current) return;
-    if (eventSourceRef.current?.readyState === EventSource.OPEN) return;
-
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
+    if (!isActiveRef.current || !token) {
+      setError("No authentication token");
+      onError?.("No authentication token");
+      return;
     }
 
-    const url = buildURL();
-    if (!url) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
 
     try {
-      const eventSource = new EventSource(url, { withCredentials: true });
+      const wsUrl = apiBase.replace(/^https?/, "wss").replace(/^http/, "ws");
+      const ws = new WebSocket(`${wsUrl}/api/ws`);
 
-      eventSource.onopen = () => {
-        setIsConnected(true);
-        setError(null);
+      ws.onopen = () => {
         reconnectAttemptsRef.current = 0;
-        onConnect?.();
+        ws.send(JSON.stringify({
+          type: "auth",
+          token,
+          userId,
+          supportUserId,
+        }));
       };
 
-      eventSource.onmessage = (event) => {
-        if (!isActiveRef.current) return;
+      ws.onmessage = (event) => {
         try {
-          if (!event.data || event.data.trim() === "" || event.data.startsWith(":")) {
-            return;
-          }
-          const data = JSON.parse(event.data);
-          if (data.type === "error") {
-            setError(data.error || "Stream error");
-            onError?.(data.error || "Stream error");
+          const message = JSON.parse(event.data);
+          
+          if (message.type === "auth" && message.data?.authenticated) {
+            setIsConnected(true);
+            setError(null);
+            
+            ws.send(JSON.stringify({
+              type: "subscribe",
+              streamType,
+              ticketId,
+              userId,
+              supportUserId,
+            }));
+            onConnect?.();
+          } else if (message.type === "subscribed") {
+            setIsConnected(true);
+            setError(null);
+          } else if (message.type === "error") {
+            setError(message.error || "WebSocket error");
+            onError?.(message.error || "WebSocket error");
+          } else if (message.type === "ping") {
+            ws.send(JSON.stringify({ type: "pong" }));
           } else {
-            onMessage?.(data);
+            onMessage?.(message);
           }
         } catch (err) {
-          console.error("SSE parse error:", err);
         }
       };
 
-      eventSource.onerror = (err) => {
-        if (!isActiveRef.current) return;
-        
-        if (eventSource.readyState === EventSource.CLOSED || eventSource.readyState === EventSource.CONNECTING) {
-          setIsConnected(false);
-          eventSource.close();
-          
-          if (isActiveRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
-            reconnectAttemptsRef.current++;
-            reconnectTimeoutRef.current = setTimeout(() => {
-              if (isActiveRef.current) {
-                connect();
-              }
-            }, reconnectDelay * Math.min(reconnectAttemptsRef.current, 5));
-          } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-            setError("Failed to reconnect after multiple attempts");
-            onError?.("Connection lost. Please refresh the page.");
-          }
+      ws.onerror = () => {
+        setError("WebSocket connection error");
+        onError?.("Connection error");
+      };
+
+      ws.onclose = () => {
+        setIsConnected(false);
+        onDisconnect?.();
+
+        if (isActiveRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
+          reconnectAttemptsRef.current++;
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (isActiveRef.current) {
+              connect();
+            }
+          }, reconnectDelay * Math.min(reconnectAttemptsRef.current, 5));
+        } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+          setError("Failed to reconnect after multiple attempts");
+          onError?.("Connection lost. Please refresh the page.");
         }
       };
 
-      eventSourceRef.current = eventSource;
+      wsRef.current = ws;
     } catch (err) {
-      setError("Failed to create SSE connection");
+      setError("Failed to create WebSocket connection");
       onError?.("Failed to create connection");
     }
-  }, [buildURL, onMessage, onError, onConnect]);
+  }, [apiBase, token, userId, supportUserId, streamType, ticketId, onMessage, onError, onConnect, onDisconnect]);
 
   const disconnect = useCallback(() => {
     isActiveRef.current = false;
@@ -133,9 +137,9 @@ export function useSSE({
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
     setIsConnected(false);
     onDisconnect?.();
