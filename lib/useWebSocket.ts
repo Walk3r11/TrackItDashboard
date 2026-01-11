@@ -59,9 +59,12 @@ export function useWebSocket({
 
     try {
       const wsUrl = apiBase.replace(/^https?/, "wss").replace(/^http/, "ws");
-      const ws = new WebSocket(`${wsUrl}/api/ws`);
+      const fullUrl = `${wsUrl}/api/ws`;
+      console.log(`[WebSocket] Attempting to connect to: ${fullUrl}`);
+      const ws = new WebSocket(fullUrl);
 
       ws.onopen = () => {
+        console.log("[WebSocket] Connection opened, sending auth...");
         reconnectAttemptsRef.current = 0;
         ws.send(JSON.stringify({
           type: "auth",
@@ -102,22 +105,26 @@ export function useWebSocket({
         }
       };
 
-      ws.onerror = () => {
+      ws.onerror = (error) => {
+        console.error("[WebSocket] Connection error:", error);
         setError("WebSocket connection error");
         onError?.("Connection error");
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        console.log(`[WebSocket] Connection closed, code: ${event.code}, reason: ${event.reason || 'none'}, wasClean: ${event.wasClean}`);
         setIsConnected(false);
         onDisconnect?.();
 
         if (isActiveRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
           reconnectAttemptsRef.current++;
+          const delay = reconnectDelay * Math.min(reconnectAttemptsRef.current, 5);
+          console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`);
           reconnectTimeoutRef.current = setTimeout(() => {
             if (isActiveRef.current) {
               connect();
             }
-          }, reconnectDelay * Math.min(reconnectAttemptsRef.current, 5));
+          }, delay);
         } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
           setError("Failed to reconnect after multiple attempts");
           onError?.("Connection lost. Please refresh the page.");
