@@ -58,8 +58,18 @@ export function useWebSocket({
     }
 
     try {
-      const wsUrl = apiBase.replace(/^https?/, "wss").replace(/^http/, "ws");
-      const fullUrl = `${wsUrl}/api/ws`;
+      const wsProxyUrl = process.env.NEXT_PUBLIC_WS_PROXY_URL;
+      let fullUrl: string;
+      
+      if (wsProxyUrl) {
+        fullUrl = wsProxyUrl.startsWith("ws://") || wsProxyUrl.startsWith("wss://") 
+          ? `${wsProxyUrl}/api/ws`
+          : `wss://${wsProxyUrl}/api/ws`;
+      } else {
+        const wsUrl = apiBase.replace(/^https?/, "wss").replace(/^http/, "ws");
+        fullUrl = `${wsUrl}/api/ws`;
+      }
+      
       const ws = new WebSocket(fullUrl);
 
       ws.onopen = () => {
