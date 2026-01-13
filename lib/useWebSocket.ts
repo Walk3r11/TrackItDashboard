@@ -15,6 +15,7 @@ type UseWebSocketOptions = {
   supportUserId?: string;
   streamType: "tickets" | "ticket-messages" | "transactions";
   ticketId?: string;
+  enabled?: boolean;
   onMessage?: (message: WebSocketMessage) => void;
   onError?: (error: string) => void;
   onConnect?: () => void;
@@ -28,6 +29,7 @@ export function useWebSocket({
   supportUserId,
   streamType,
   ticketId,
+  enabled = true,
   onMessage,
   onError,
   onConnect,
@@ -69,7 +71,7 @@ export function useWebSocket({
   }, [token]);
 
   const connect = useCallback(() => {
-    if (!isActiveRef.current || !token) {
+    if (!enabled || !isActiveRef.current || !token) {
       setError("No authentication token");
       onErrorRef.current?.("No authentication token");
       return;
@@ -185,7 +187,7 @@ export function useWebSocket({
       setError("Failed to create WebSocket connection");
       onError?.("Failed to create connection");
     }
-  }, [apiBase, token, userId, supportUserId, streamType, ticketId]);
+  }, [apiBase, token, userId, supportUserId, streamType, ticketId, enabled]);
 
   const disconnect = useCallback(() => {
     isActiveRef.current = false;
@@ -203,11 +205,13 @@ export function useWebSocket({
 
   useEffect(() => {
     isActiveRef.current = true;
-    connect();
+    if (enabled) {
+      connect();
+    }
     return () => {
       disconnect();
     };
-  }, [connect, disconnect]);
+  }, [connect, disconnect, enabled]);
 
   return { isConnected, error, reconnect: connect, disconnect };
 }

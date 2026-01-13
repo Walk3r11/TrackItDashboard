@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import TicketChat from "@/components/TicketChat";
 import GroqQuery from "@/components/GroqQuery";
+import { useWebSocket } from "@/lib/useWebSocket";
 
 type User = {
   id: string;
@@ -67,8 +68,6 @@ export default function Page() {
   const [newTransactionIds, setNewTransactionIds] = useState<Set<string>>(new Set());
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
-  const transactionEventSourceRef = useRef<EventSource | null>(null);
-  const ticketEventSourceRef = useRef<EventSource | null>(null);
   const userSectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -128,8 +127,6 @@ export default function Page() {
       await loadCards(body.user.id);
       setActiveTab("overview");
       setNewTransactionCount(0);
-      startTransactionStream(body.user.id);
-      startTicketStream(body.user.id);
 
       setTimeout(() => {
         if (userSectionRef.current) {
@@ -150,130 +147,106 @@ export default function Page() {
     }
   }
 
-  function startTransactionStream(userId: string) {
-    if (transactionEventSourceRef.current) {
-      transactionEventSourceRef.current.close();
-    }
+  const handleTransactionMessage = useCallback((message: any) => {
+    if (message.type !== "transaction" || !message.data) return;
+    const tx = message.data;
+    if (!tx.id) return;
 
-    const url = `${apiBase}/api/transactions/stream?userId=${encodeURIComponent(userId)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
-    const eventSource = new EventSource(url, {
-      withCredentials: true,
+    const amount = typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0);
+    const mappedTx: TransactionItem = {
+      id: tx.id,
+      title: tx.category ?? tx.title ?? "Transaction",
+      amount,
+      date: tx.date ?? tx.createdAt ?? tx.created_at ?? new Date().toISOString(),
+      type: tx.type ?? (amount >= 0 ? "credit" : "debit"),
+      category: tx.category ?? undefined,
+      categoryColor: tx.categoryColor ?? undefined
+    };
+
+    setTransactions((prev) => {
+      const exists = prev.some((t) => t.id === mappedTx.id);
+      if (exists) return prev;
+      return [mappedTx, ...prev];
     });
 
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "transaction" && data.transaction) {
-          const tx = data.transaction;
-          setTransactions((prev) => {
-            const exists = prev.some((t) => t.id === tx.id);
-            if (exists) return prev;
-            const mappedTx: TransactionItem = {
-              id: tx.id,
-              title: tx.category ?? "Transaction",
-              amount: typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0),
-              date: tx.createdAt ?? tx.created_at ?? tx.date ?? new Date().toISOString(),
-              type: (typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0)) >= 0 ? "credit" : "debit",
-              category: tx.category ?? undefined,
-              categoryColor: tx.categoryColor ?? undefined
-            };
-            return [mappedTx, ...prev];
-          });
-          setNewTransactionIds((ids) => {
-            if (ids.has(tx.id)) return ids;
-            const newIds = new Set([...ids, tx.id]);
-            setNewTransactionCount(newIds.size);
-            setTimeout(() => {
-              setNewTransactionIds((currentIds) => {
-                const newSet = new Set(currentIds);
-                newSet.delete(tx.id);
-                setNewTransactionCount(newSet.size);
-                return newSet;
-              });
-            }, 10000);
-            if (user) {
-              setNewTransactionUser(user.name || user.email);
-              setTimeout(() => setNewTransactionUser(null), 5000);
-            }
-            return newIds;
-          });
-        }
-      } catch (err) {
+    setNewTransactionIds((ids) => {
+      if (ids.has(mappedTx.id)) return ids;
+      const newIds = new Set([...ids, mappedTx.id]);
+      setNewTransactionCount(newIds.size);
+      setTimeout(() => {
+        setNewTransactionIds((currentIds) => {
+          const newSet = new Set(currentIds);
+          newSet.delete(mappedTx.id);
+          setNewTransactionCount(newSet.size);
+          return newSet;
+        });
+      }, 10000);
+      if (user) {
+        setNewTransactionUser(user.name || user.email);
+        setTimeout(() => setNewTransactionUser(null), 5000);
       }
-    };
+      return newIds;
+    });
+  }, [user]);
 
-    eventSource.onerror = (err) => {
-      if (eventSource.readyState === EventSource.CLOSED) {
-        eventSource.close();
-        setTimeout(() => {
-          if (transactionEventSourceRef.current === eventSource && user) {
-            startTransactionStream(user.id);
-          }
-        }, 3000);
+  const handleTicketMessage = useCallback((message: any) => {
+    if (message.type !== "ticket" || !message.data) return;
+    const ticket = message.data;
+    if (!ticket.id) return;
+
+    setTickets((prev) => {
+      const idx = prev.findIndex((t) => t.id === ticket.id);
+      const updatedAt = ticket.updatedAt ?? ticket.updated_at ?? new Date().toISOString();
+      if (idx === -1) {
+        return [{
+          id: ticket.id,
+          userId: ticket.userId ?? ticket.user_id,
+          subject: ticket.subject ?? "Ticket",
+          status: ticket.status ?? "open",
+          priority: ticket.priority,
+          updatedAt
+        }, ...prev];
       }
-    };
-
-    transactionEventSourceRef.current = eventSource;
-  }
-
-  function stopTransactionStream() {
-    if (transactionEventSourceRef.current) {
-      transactionEventSourceRef.current.close();
-      transactionEventSourceRef.current = null;
-    }
-  }
-
-  function startTicketStream(userId: string) {
-    if (ticketEventSourceRef.current) {
-      ticketEventSourceRef.current.close();
-    }
-
-    const url = `${apiBase}/api/tickets/stream?userId=${encodeURIComponent(userId)}${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
-    const eventSource = new EventSource(url, {
-      withCredentials: true,
+      const updated = [...prev];
+      updated[idx] = {
+        ...updated[idx],
+        subject: ticket.subject ?? updated[idx].subject,
+        status: ticket.status ?? updated[idx].status,
+        priority: ticket.priority ?? updated[idx].priority,
+        updatedAt
+      };
+      return updated;
     });
 
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "ticket" && data.ticket) {
-          setTickets((prev) => {
-            const exists = prev.some((t) => t.id === data.ticket.id);
-            if (exists) return prev;
-            return [data.ticket, ...prev];
-          });
-        }
-      } catch (err) {
-      }
-    };
-
-    eventSource.onerror = (err) => {
-      if (eventSource.readyState === EventSource.CLOSED) {
-        eventSource.close();
-        setTimeout(() => {
-          if (ticketEventSourceRef.current === eventSource && user) {
-            startTicketStream(user.id);
-          }
-        }, 3000);
-      }
-    };
-
-    ticketEventSourceRef.current = eventSource;
-  }
-
-  function stopTicketStream() {
-    if (ticketEventSourceRef.current) {
-      ticketEventSourceRef.current.close();
-      ticketEventSourceRef.current = null;
-    }
-  }
-
-  useEffect(() => {
-    return () => {
-      stopTransactionStream();
-      stopTicketStream();
-    };
+    setSelectedTicket((prev) => {
+      if (!prev || prev.id !== ticket.id) return prev;
+      return {
+        ...prev,
+        subject: ticket.subject ?? prev.subject,
+        status: ticket.status ?? prev.status
+      };
+    });
   }, []);
+
+  useWebSocket({
+    apiBase,
+    token: authToken ?? "",
+    userId: user?.id,
+    supportUserId: user?.id,
+    streamType: "transactions",
+    onMessage: handleTransactionMessage,
+    enabled: Boolean(authToken && user?.id)
+  });
+
+  useWebSocket({
+    apiBase,
+    token: authToken ?? "",
+    userId: user?.id,
+    supportUserId: user?.id,
+    streamType: "tickets",
+    onMessage: handleTicketMessage,
+    enabled: Boolean(authToken && user?.id)
+  });
 
   async function loadAllTickets(status?: string) {
     try {
