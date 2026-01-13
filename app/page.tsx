@@ -1,7 +1,7 @@
 "use client";
 
 import { ShieldCheck, Ticket, Users, Zap, LogOut, Bot } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import TicketChat from "@/components/TicketChat";
 import GroqQuery from "@/components/GroqQuery";
