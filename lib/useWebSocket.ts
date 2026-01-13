@@ -185,7 +185,7 @@ export function useWebSocket({
       wsRef.current = ws;
     } catch (err) {
       setError("Failed to create WebSocket connection");
-      onError?.("Failed to create connection");
+      onErrorRef.current?.("Failed to create connection");
     }
   }, [apiBase, token, userId, supportUserId, streamType, ticketId, enabled]);
 
@@ -200,8 +200,8 @@ export function useWebSocket({
       wsRef.current = null;
     }
     setIsConnected(false);
-    onDisconnect?.();
-  }, [onDisconnect]);
+    onDisconnectRef.current?.();
+  }, []);
 
   useEffect(() => {
     isActiveRef.current = true;

@@ -140,8 +140,6 @@ export default function Page() {
       setTickets([]);
       setTransactions([]);
       setCards([]);
-      stopTransactionStream();
-      stopTicketStream();
     } finally {
       setLoading(false);
     }
