@@ -18,6 +18,7 @@ type TicketChatProps = {
   ticketSubject: string;
   ticketStatus: "open" | "pending" | "closed";
   userId: string;
+  authToken?: string | null;
   onClose: () => void;
   apiBase: string;
   onStatusChange: (status: "open" | "pending" | "closed") => void;
@@ -28,6 +29,7 @@ export default function TicketChat({
   ticketSubject,
   ticketStatus: initialStatus,
   userId,
+  authToken,
   onClose,
   apiBase,
   onStatusChange,
@@ -46,9 +48,10 @@ export default function TicketChat({
   const tempMessageIdsRef = useRef<Set<string>>(new Set());
   const processedMessageIdsRef = useRef<Set<string>>(new Set());
   
-  const token = typeof document !== "undefined" 
+  const cookieToken = typeof document !== "undefined" 
     ? document.cookie.split("; ").find((row) => row.startsWith("auth-token="))?.split("=")[1] 
     : "";
+  const token = authToken ?? cookieToken ?? "";
 
   const handleClose = () => {
     setIsClosing(true);

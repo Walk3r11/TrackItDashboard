@@ -39,17 +39,46 @@ export function useWebSocket({
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const isActiveRef = useRef(true);
+  const authFailedRef = useRef(false);
+  const onMessageRef = useRef(onMessage);
+  const onErrorRef = useRef(onError);
+  const onConnectRef = useRef(onConnect);
+  const onDisconnectRef = useRef(onDisconnect);
   const maxReconnectAttempts = 10;
   const reconnectDelay = 1000;
+
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    onConnectRef.current = onConnect;
+  }, [onConnect]);
+
+  useEffect(() => {
+    onDisconnectRef.current = onDisconnect;
+  }, [onDisconnect]);
+
+  useEffect(() => {
+    authFailedRef.current = false;
+    reconnectAttemptsRef.current = 0;
+  }, [token]);
 
   const connect = useCallback(() => {
     if (!isActiveRef.current || !token) {
       setError("No authentication token");
-      onError?.("No authentication token");
+      onErrorRef.current?.("No authentication token");
       return;
     }
 
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    if (
+      wsRef.current?.readyState === WebSocket.OPEN ||
+      wsRef.current?.readyState === WebSocket.CONNECTING
+    ) {
       return;
     }
 
@@ -76,7 +105,6 @@ export function useWebSocket({
       const ws = new WebSocket(fullUrl);
 
       ws.onopen = () => {
-        reconnectAttemptsRef.current = 0;
         ws.send(JSON.stringify({
           type: "auth",
           token,
@@ -92,6 +120,8 @@ export function useWebSocket({
           if (message.type === "auth" && message.data?.authenticated) {
             setIsConnected(true);
             setError(null);
+            reconnectAttemptsRef.current = 0;
+            authFailedRef.current = false;
             
             ws.send(JSON.stringify({
               type: "subscribe",
@@ -100,17 +130,24 @@ export function useWebSocket({
               userId,
               supportUserId,
             }));
-            onConnect?.();
+            onConnectRef.current?.();
           } else if (message.type === "subscribed") {
             setIsConnected(true);
             setError(null);
+            reconnectAttemptsRef.current = 0;
+            authFailedRef.current = false;
           } else if (message.type === "error") {
-            setError(message.error || "WebSocket error");
-            onError?.(message.error || "WebSocket error");
+            const errorMessage = message.error || "WebSocket error";
+            setError(errorMessage);
+            onErrorRef.current?.(errorMessage);
+            if (/auth|unauthorized|access denied/i.test(errorMessage)) {
+              authFailedRef.current = true;
+              ws.close();
+            }
           } else if (message.type === "ping") {
             ws.send(JSON.stringify({ type: "pong" }));
           } else {
-            onMessage?.(message);
+            onMessageRef.current?.(message);
           }
         } catch (err) {
         }
@@ -118,14 +155,18 @@ export function useWebSocket({
 
       ws.onerror = () => {
         setError("WebSocket connection error");
-        onError?.("Connection error");
+        onErrorRef.current?.("Connection error");
       };
 
       ws.onclose = (event) => {
         setIsConnected(false);
-        onDisconnect?.();
+        onDisconnectRef.current?.();
 
-        if (isActiveRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
+        if (
+          isActiveRef.current &&
+          !authFailedRef.current &&
+          reconnectAttemptsRef.current < maxReconnectAttempts
+        ) {
           reconnectAttemptsRef.current++;
           const delay = reconnectDelay * Math.min(reconnectAttemptsRef.current, 5);
           reconnectTimeoutRef.current = setTimeout(() => {
@@ -135,7 +176,7 @@ export function useWebSocket({
           }, delay);
         } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
           setError("Failed to reconnect after multiple attempts");
-          onError?.("Connection lost. Please refresh the page.");
+          onErrorRef.current?.("Connection lost. Please refresh the page.");
         }
       };
 
@@ -144,7 +185,7 @@ export function useWebSocket({
       setError("Failed to create WebSocket connection");
       onError?.("Failed to create connection");
     }
-  }, [apiBase, token, userId, supportUserId, streamType, ticketId, onMessage, onError, onConnect, onDisconnect]);
+  }, [apiBase, token, userId, supportUserId, streamType, ticketId]);
 
   const disconnect = useCallback(() => {
     isActiveRef.current = false;

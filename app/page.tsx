@@ -817,6 +817,7 @@ export default function Page() {
               ticketSubject={selectedTicket.subject}
               ticketStatus={selectedTicket.status}
               userId={user?.id || tickets.find(t => t.id === selectedTicket.id)?.userId || ""}
+              authToken={authToken}
               onClose={() => setSelectedTicket(null)}
               apiBase={apiBase}
               onStatusChange={(newStatus) => {
