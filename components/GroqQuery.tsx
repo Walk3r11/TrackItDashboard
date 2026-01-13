@@ -25,6 +25,10 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const optimisticUserMessageRef = useRef<string | null>(null);
   const optimisticAssistantMessageRef = useRef<string | null>(null);
+  const getToken = useCallback(
+    () => (typeof window !== "undefined" ? window.localStorage.getItem("trackit_dashboard_token") : null),
+    []
+  );
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,10 +40,7 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
 
   const saveChatHistory = useCallback(async (messagesToSave: Message[], chatIdToUse: string | null) => {
     try {
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("auth-token="))
-        ?.split("=")[1];
+      const token = getToken();
 
       const finalChatId = chatIdToUse || crypto.randomUUID();
       
@@ -49,7 +50,6 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        credentials: "include",
         body: JSON.stringify({
           messages: messagesToSave,
           chatId: finalChatId,
@@ -62,7 +62,7 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
     } catch (error) {
       console.error("Failed to save chat history:", error);
     }
-  }, [apiBase, userId]);
+  }, [apiBase, userId, getToken]);
 
   const loadChatHistory = useCallback(async () => {
     // Don't load user's chat history - support should have a fresh AI assistant
@@ -100,10 +100,7 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
     });
 
     try {
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("auth-token="))
-        ?.split("=")[1];
+      const token = getToken();
 
       const response = await fetch(`${apiBase}/api/groq`, {
         method: "POST",
@@ -111,7 +108,6 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        credentials: "include",
         body: JSON.stringify({
           messages: updatedMessages,
           model: "openai/gpt-oss-120b",

@@ -23,7 +23,6 @@ export default function LoginClient() {
       const response = await fetch(`${apiBase}/api/auth/dashboard/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           password: password
@@ -38,7 +37,7 @@ export default function LoginClient() {
       }
 
       if (data.token) {
-        document.cookie = `auth-token=${data.token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax; Secure`;
+        localStorage.setItem("trackit_dashboard_token", data.token);
       }
 
       router.push("/");

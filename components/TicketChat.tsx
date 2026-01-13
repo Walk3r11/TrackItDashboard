@@ -48,10 +48,10 @@ export default function TicketChat({
   const tempMessageIdsRef = useRef<Set<string>>(new Set());
   const processedMessageIdsRef = useRef<Set<string>>(new Set());
   
-  const cookieToken = typeof document !== "undefined" 
-    ? document.cookie.split("; ").find((row) => row.startsWith("auth-token="))?.split("=")[1] 
-    : "";
-  const token = authToken ?? cookieToken ?? "";
+  const storageToken = typeof window !== "undefined"
+    ? window.localStorage.getItem("trackit_dashboard_token")
+    : null;
+  const token = authToken ?? storageToken ?? "";
 
   const handleClose = () => {
     setIsClosing(true);
@@ -68,6 +68,9 @@ export default function TicketChat({
         `${apiBase}/api/tickets/${ticketId}/messages?supportUserId=${userId}`,
         {
           cache: "no-store",
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
         }
       );
       if (!res.ok) throw new Error("Failed to load messages");
@@ -82,7 +85,7 @@ export default function TicketChat({
     } finally {
       setLoading(false);
     }
-  }, [apiBase, ticketId, userId]);
+  }, [apiBase, ticketId, userId, token]);
 
   const scrollToBottom = useCallback((force = false) => {
     if (messagesContainerRef.current) {
@@ -214,6 +217,7 @@ export default function TicketChat({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
             content: text,
@@ -286,11 +290,6 @@ export default function TicketChat({
     setError(null);
     
     try {
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("auth-token="))
-        ?.split("=")[1];
-
       const res = await fetch(
         `${apiBase}/api/tickets/${ticketId}/status`,
         {
@@ -299,7 +298,6 @@ export default function TicketChat({
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          credentials: "include",
           body: JSON.stringify({
             status: "open",
           }),
@@ -327,11 +325,6 @@ export default function TicketChat({
     setError(null);
     
     try {
-      const token = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("auth-token="))
-        ?.split("=")[1];
-
       const res = await fetch(
         `${apiBase}/api/tickets/${ticketId}/status`,
         {
@@ -340,7 +333,6 @@ export default function TicketChat({
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          credentials: "include",
           body: JSON.stringify({
             status: "closed",
           }),

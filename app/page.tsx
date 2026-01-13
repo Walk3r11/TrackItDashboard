@@ -45,6 +45,12 @@ const dateLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numer
 const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "https://backend-production-0eac.up.railway.app";
 const euroCutover = new Date("2026-01-01T00:00:00Z");
 const bgnToEur = 1.95583;
+const authStorageKey = "trackit_dashboard_token";
+
+const buildAuthHeaders = (token: string | null, extra?: HeadersInit): HeadersInit => ({
+  ...(extra ?? {}),
+  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+});
 
 export default function Page() {
   const router = useRouter();
@@ -69,24 +75,40 @@ export default function Page() {
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const userSectionRef = useRef<HTMLElement | null>(null);
+  const getAuthToken = () =>
+    authToken ?? (typeof window !== "undefined" ? window.localStorage.getItem(authStorageKey) : null);
 
   useEffect(() => {
+    const storedToken = typeof window !== "undefined"
+      ? window.localStorage.getItem(authStorageKey)
+      : null;
+
+    if (!storedToken) {
+      setAuthLoading(false);
+      router.push("/login");
+      return;
+    }
+
+    setAuthToken(storedToken);
+
     fetch(`${apiBase}/api/auth/dashboard/session`, {
-      credentials: "include",
+      headers: buildAuthHeaders(storedToken),
+      cache: "no-store",
     })
       .then((res) => res.json())
       .then((data) => {
         if (data.authenticated) {
           setSupportUser({ email: data.user.email });
-          if (data.token) {
-            setAuthToken(data.token);
-          }
-          loadAllTickets();
+          loadAllTickets(undefined, storedToken);
         } else {
+          window.localStorage.removeItem(authStorageKey);
+          setAuthToken(null);
           router.push("/login");
         }
       })
       .catch(() => {
+        window.localStorage.removeItem(authStorageKey);
+        setAuthToken(null);
         router.push("/login");
       })
       .finally(() => {
@@ -95,11 +117,13 @@ export default function Page() {
   }, [router]);
 
   async function handleLogout() {
+    const token = authToken ?? (typeof window !== "undefined" ? window.localStorage.getItem(authStorageKey) : null);
     await fetch(`${apiBase}/api/auth/dashboard/logout`, {
       method: "POST",
-      credentials: "include",
+      headers: buildAuthHeaders(token),
     });
-    document.cookie = "auth-token=; path=/; max-age=0";
+    window.localStorage.removeItem(authStorageKey);
+    setAuthToken(null);
     router.push("/login");
     router.refresh();
   }
@@ -112,7 +136,10 @@ export default function Page() {
     try {
       const base = apiBase;
       const lookupUrl = `${base}/api/users/lookup?query=${encodeURIComponent(query.trim())}`;
-      const res = await fetch(lookupUrl, { cache: "no-store" });
+      const res = await fetch(lookupUrl, {
+        cache: "no-store",
+        headers: buildAuthHeaders(getAuthToken()),
+      });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "User not found");
@@ -246,13 +273,13 @@ export default function Page() {
     enabled: Boolean(authToken && user?.id)
   });
 
-  async function loadAllTickets(status?: string) {
+  async function loadAllTickets(status?: string, tokenOverride?: string | null) {
     try {
       const base = apiBase;
       const url = `${base}/api/tickets${status ? `?status=${status}` : ""}`;
       const res = await fetch(url, {
         cache: "no-store",
-        credentials: "include",
+        headers: buildAuthHeaders(tokenOverride ?? getAuthToken()),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -279,7 +306,7 @@ export default function Page() {
       const url = `${base}/api/tickets?userId=${encodeURIComponent(userId)}`;
       const res = await fetch(url, {
         cache: "no-store",
-        credentials: "include",
+        headers: buildAuthHeaders(getAuthToken()),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -304,7 +331,10 @@ export default function Page() {
     try {
       const base = apiBase;
       const url = `${base}/api/transactions?userId=${encodeURIComponent(userId)}`;
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetch(url, {
+        cache: "no-store",
+        headers: buildAuthHeaders(getAuthToken()),
+      });
       if (!res.ok) throw new Error("Transactions request failed");
       const body = await res.json();
       const mapped: TransactionItem[] = (body.transactions ?? []).map((tx: any) => ({
@@ -326,7 +356,10 @@ export default function Page() {
     try {
       const base = apiBase;
       const url = `${base}/api/cards?userId=${encodeURIComponent(userId)}`;
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetch(url, {
+        cache: "no-store",
+        headers: buildAuthHeaders(getAuthToken()),
+      });
       if (!res.ok) throw new Error("Cards request failed");
       const body = await res.json();
       const toNumber = (val: any): number => {
