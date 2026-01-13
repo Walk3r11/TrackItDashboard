@@ -20,14 +20,18 @@ export default function LoginClient() {
 
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "https://backend-production-0eac.up.railway.app";
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 10000);
       const response = await fetch(`${apiBase}/api/auth/dashboard/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           password: password
-        })
+        }),
+        signal: controller.signal,
       });
+      window.clearTimeout(timeoutId);
 
       const data = await response.json().catch(() => ({}));
 
@@ -42,9 +46,15 @@ export default function LoginClient() {
 
       router.push("/");
       router.refresh();
+      window.setTimeout(() => {
+        if (window.location.pathname === "/login") {
+          window.location.assign("/");
+        }
+      }, 300);
     } catch (err) {
       setState("error");
-      setMessage(err instanceof Error ? err.message : "Invalid email or password.");
+      const isAbort = err instanceof DOMException && err.name === "AbortError";
+      setMessage(isAbort ? "Login request timed out. Please try again." : (err instanceof Error ? err.message : "Invalid email or password."));
     }
   }
 

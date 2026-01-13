@@ -149,9 +149,11 @@ export default function Page() {
         throw new Error("User not found. Please check the email or ID and try again.");
       }
       setUser(body.user);
-      await loadTickets(body.user.id);
-      await loadTransactions(body.user.id);
-      await loadCards(body.user.id);
+      await Promise.all([
+        loadTickets(body.user.id),
+        loadTransactions(body.user.id),
+        loadCards(body.user.id),
+      ]);
       setActiveTab("overview");
       setNewTransactionCount(0);
 
