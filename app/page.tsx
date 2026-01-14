@@ -72,10 +72,12 @@ export default function Page() {
   const [newTransactionCount, setNewTransactionCount] = useState(0);
   const [newTransactionUser, setNewTransactionUser] = useState<string | null>(null);
   const [newTransactionIds, setNewTransactionIds] = useState<Set<string>>(new Set());
+  const [newestTransactionId, setNewestTransactionId] = useState<string | null>(null);
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const userSectionRef = useRef<HTMLElement | null>(null);
-  const getAuthToken = () => {
+  const getAuthToken = useCallback(() => {
     if (authToken) return authToken;
     if (typeof window === "undefined") return null;
     const stored = window.localStorage.getItem(authStorageKey);
@@ -85,7 +87,7 @@ export default function Page() {
       .find((row) => row.startsWith("auth-token="))
       ?.split("=")[1];
     return cookieToken ?? null;
-  };
+  }, [authToken]);
 
   useEffect(() => {
     const storedToken = getAuthToken();
@@ -122,6 +124,21 @@ export default function Page() {
         setAuthLoading(false);
       });
   }, [router]);
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
+  }, [user?.id]);
 
   async function handleLogout() {
     const token = authToken ?? (typeof window !== "undefined" ? window.localStorage.getItem(authStorageKey) : null);
@@ -181,6 +198,126 @@ export default function Page() {
     }
   }
 
+  const loadAllTickets = useCallback(async (status?: string, tokenOverride?: string | null) => {
+    try {
+      const base = apiBase;
+      const url = `${base}/api/tickets${status ? `?status=${status}` : ""}`;
+      const res = await fetch(url, {
+        cache: "no-store",
+        headers: buildAuthHeaders(tokenOverride ?? getAuthToken()),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to load tickets");
+      }
+      const body = await res.json();
+      const ticketsList = (body.tickets ?? []).map((t: any) => ({
+        id: t.id,
+        userId: t.userId || t.user_id,
+        subject: t.subject,
+        status: t.status,
+        priority: t.priority,
+        updatedAt: t.updatedAt || t.updated_at
+      }));
+      setTickets(ticketsList);
+    } catch (err) {
+      setTickets([]);
+    }
+  }, [getAuthToken]);
+
+  const loadTickets = useCallback(async (userId: string) => {
+    try {
+      const base = apiBase;
+      const url = `${base}/api/tickets?userId=${encodeURIComponent(userId)}`;
+      const res = await fetch(url, {
+        cache: "no-store",
+        headers: buildAuthHeaders(getAuthToken()),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to load tickets");
+      }
+      const body = await res.json();
+      const ticketsList = (body.tickets ?? []).map((t: any) => ({
+        id: t.id,
+        userId: t.userId || t.user_id,
+        subject: t.subject,
+        status: t.status,
+        priority: t.priority,
+        updatedAt: t.updatedAt || t.updated_at
+      }));
+      setTickets(ticketsList);
+    } catch (err) {
+      setTickets([]);
+    }
+  }, [getAuthToken]);
+
+  const loadTransactions = useCallback(async (userId: string) => {
+    try {
+      const base = apiBase;
+      const url = `${base}/api/transactions?userId=${encodeURIComponent(userId)}`;
+      const res = await fetch(url, {
+        cache: "no-store",
+        headers: buildAuthHeaders(getAuthToken()),
+      });
+      if (!res.ok) throw new Error("Transactions request failed");
+      const body = await res.json();
+      const mapped: TransactionItem[] = (body.transactions ?? []).map((tx: any) => ({
+        id: tx.id,
+        title: tx.category ?? "Transaction",
+        amount: typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0),
+        date: tx.createdAt ?? tx.created_at ?? tx.date ?? new Date().toISOString(),
+        type: (typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0)) >= 0 ? "credit" : "debit",
+        category: tx.category ?? undefined,
+        categoryColor: tx.categoryColor ?? undefined
+      }));
+      setTransactions(mapped);
+    } catch (err) {
+      setTransactions([]);
+    }
+  }, [getAuthToken]);
+
+  const loadCards = useCallback(async (userId: string) => {
+    try {
+      const base = apiBase;
+      const url = `${base}/api/cards?userId=${encodeURIComponent(userId)}`;
+      const res = await fetch(url, {
+        cache: "no-store",
+        headers: buildAuthHeaders(getAuthToken()),
+      });
+      if (!res.ok) throw new Error("Cards request failed");
+      const body = await res.json();
+      const toNumber = (val: any): number => {
+        if (typeof val === "number") return val;
+        const num = Number(val);
+        return isNaN(num) ? 0 : num;
+      };
+      const mapped: CardItem[] = (body.cards ?? []).map((card: any) => ({
+        id: card.id,
+        name: card.nickname || "Card",
+        balance: toNumber(card.balance),
+        limit: toNumber(card.card_limit),
+        tags: Array.isArray(card.tags) ? card.tags : undefined
+      }));
+      setCards(mapped);
+    } catch (err) {
+      setCards([]);
+    }
+  }, [getAuthToken]);
+
+  const scheduleUserRefresh = useCallback((delay = 250) => {
+    if (!user?.id) return;
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+    refreshTimeoutRef.current = setTimeout(() => {
+      refreshTimeoutRef.current = null;
+      loadTickets(user.id);
+      loadTransactions(user.id);
+      loadCards(user.id);
+    }, delay);
+  }, [user?.id, loadTickets, loadTransactions, loadCards]);
+
   const handleTransactionMessage = useCallback((message: any) => {
     if (message.type !== "transaction" || !message.data) return;
     const tx = message.data;
@@ -207,11 +344,15 @@ export default function Page() {
       if (ids.has(mappedTx.id)) return ids;
       const newIds = new Set([...ids, mappedTx.id]);
       setNewTransactionCount(newIds.size);
+      setNewestTransactionId(mappedTx.id);
       setTimeout(() => {
         setNewTransactionIds((currentIds) => {
           const newSet = new Set(currentIds);
           newSet.delete(mappedTx.id);
           setNewTransactionCount(newSet.size);
+          setNewestTransactionId((currentNewest) => (
+            currentNewest === mappedTx.id ? null : currentNewest
+          ));
           return newSet;
         });
       }, 10000);
@@ -221,7 +362,8 @@ export default function Page() {
       }
       return newIds;
     });
-  }, [user]);
+    scheduleUserRefresh();
+  }, [user, scheduleUserRefresh]);
 
   const handleTicketMessage = useCallback((message: any) => {
     if (message.type !== "ticket" || !message.data) return;
@@ -260,7 +402,8 @@ export default function Page() {
         status: ticket.status ?? prev.status
       };
     });
-  }, []);
+    scheduleUserRefresh();
+  }, [scheduleUserRefresh]);
 
   useWebSocket({
     apiBase,
@@ -269,6 +412,7 @@ export default function Page() {
     supportUserId: user?.id,
     streamType: "transactions",
     onMessage: handleTransactionMessage,
+    onConnect: () => scheduleUserRefresh(0),
     enabled: Boolean(authToken && user?.id)
   });
 
@@ -279,115 +423,32 @@ export default function Page() {
     supportUserId: user?.id,
     streamType: "tickets",
     onMessage: handleTicketMessage,
+    onConnect: () => scheduleUserRefresh(0),
     enabled: Boolean(authToken && user?.id)
   });
 
-  async function loadAllTickets(status?: string, tokenOverride?: string | null) {
-    try {
-      const base = apiBase;
-      const url = `${base}/api/tickets${status ? `?status=${status}` : ""}`;
-      const res = await fetch(url, {
-        cache: "no-store",
-        headers: buildAuthHeaders(tokenOverride ?? getAuthToken()),
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to load tickets");
-      }
-      const body = await res.json();
-      const ticketsList = (body.tickets ?? []).map((t: any) => ({
-        id: t.id,
-        userId: t.userId || t.user_id,
-        subject: t.subject,
-        status: t.status,
-        priority: t.priority,
-        updatedAt: t.updatedAt || t.updated_at
-      }));
-      setTickets(ticketsList);
-    } catch (err) {
-      setTickets([]);
-    }
-  }
+  useEffect(() => {
+    if (!user?.id) return;
+    loadTickets(user.id);
+    loadTransactions(user.id);
+    loadCards(user.id);
+    const interval = setInterval(() => {
+      loadTickets(user.id);
+      loadTransactions(user.id);
+      loadCards(user.id);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id, loadTickets, loadTransactions, loadCards]);
 
-  async function loadTickets(userId: string) {
-    try {
-      const base = apiBase;
-      const url = `${base}/api/tickets?userId=${encodeURIComponent(userId)}`;
-      const res = await fetch(url, {
-        cache: "no-store",
-        headers: buildAuthHeaders(getAuthToken()),
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to load tickets");
-      }
-      const body = await res.json();
-      const ticketsList = (body.tickets ?? []).map((t: any) => ({
-        id: t.id,
-        userId: t.userId || t.user_id,
-        subject: t.subject,
-        status: t.status,
-        priority: t.priority,
-        updatedAt: t.updatedAt || t.updated_at
-      }));
-      setTickets(ticketsList);
-    } catch (err) {
-      setTickets([]);
-    }
-  }
-
-  async function loadTransactions(userId: string) {
-    try {
-      const base = apiBase;
-      const url = `${base}/api/transactions?userId=${encodeURIComponent(userId)}`;
-      const res = await fetch(url, {
-        cache: "no-store",
-        headers: buildAuthHeaders(getAuthToken()),
-      });
-      if (!res.ok) throw new Error("Transactions request failed");
-      const body = await res.json();
-      const mapped: TransactionItem[] = (body.transactions ?? []).map((tx: any) => ({
-        id: tx.id,
-        title: tx.category ?? "Transaction",
-        amount: typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0),
-        date: tx.createdAt ?? tx.created_at ?? tx.date ?? new Date().toISOString(),
-        type: (typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0)) >= 0 ? "credit" : "debit",
-        category: tx.category ?? undefined,
-        categoryColor: tx.categoryColor ?? undefined
-      }));
-      setTransactions(mapped);
-    } catch (err) {
-      setTransactions([]);
-    }
-  }
-
-  async function loadCards(userId: string) {
-    try {
-      const base = apiBase;
-      const url = `${base}/api/cards?userId=${encodeURIComponent(userId)}`;
-      const res = await fetch(url, {
-        cache: "no-store",
-        headers: buildAuthHeaders(getAuthToken()),
-      });
-      if (!res.ok) throw new Error("Cards request failed");
-      const body = await res.json();
-      const toNumber = (val: any): number => {
-        if (typeof val === "number") return val;
-        const num = Number(val);
-        return isNaN(num) ? 0 : num;
-      };
-      const mapped: CardItem[] = (body.cards ?? []).map((card: any) => ({
-        id: card.id,
-        name: card.nickname || "Card",
-        balance: toNumber(card.balance),
-        limit: toNumber(card.card_limit),
-        tags: Array.isArray(card.tags) ? card.tags : undefined
-      }));
-      setCards(mapped);
-    } catch (err) {
-      setCards([]);
-    }
-  }
+  useEffect(() => {
+    if (user?.id || !authToken) return;
+    const statusFilter = ticketStatus === "all" ? undefined : ticketStatus;
+    loadAllTickets(statusFilter);
+    const interval = setInterval(() => {
+      loadAllTickets(statusFilter);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id, authToken, ticketStatus, loadAllTickets]);
 
   if (authLoading) {
     return (
@@ -500,8 +561,8 @@ export default function Page() {
                   }, 150);
                 }}
                 className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "overview"
-                    ? "text-cyan-300 border-b-2 border-cyan-300"
-                    : "text-slate-400 hover:text-slate-200"
+                  ? "text-cyan-300 border-b-2 border-cyan-300"
+                  : "text-slate-400 hover:text-slate-200"
                   }`}
               >
                 Overview
@@ -516,8 +577,8 @@ export default function Page() {
                   }, 150);
                 }}
                 className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "tickets"
-                    ? "text-cyan-300 border-b-2 border-cyan-300"
-                    : "text-slate-400 hover:text-slate-200"
+                  ? "text-cyan-300 border-b-2 border-cyan-300"
+                  : "text-slate-400 hover:text-slate-200"
                   }`}
               >
                 <span className="flex items-center gap-2">
@@ -532,8 +593,8 @@ export default function Page() {
                   setIsTabTransitioning(false);
                 }}
                 className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "groq"
-                    ? "text-cyan-300 border-b-2 border-cyan-300"
-                    : "text-slate-400 hover:text-slate-200"
+                  ? "text-cyan-300 border-b-2 border-cyan-300"
+                  : "text-slate-400 hover:text-slate-200"
                   }`}
               >
                 <span className="flex items-center gap-2">
@@ -556,8 +617,8 @@ export default function Page() {
                   }, 150);
                 }}
                 className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "insights"
-                    ? "text-cyan-300 border-b-2 border-cyan-300"
-                    : "text-slate-400 hover:text-slate-200"
+                  ? "text-cyan-300 border-b-2 border-cyan-300"
+                  : "text-slate-400 hover:text-slate-200"
                   }`}
               >
                 <span className="flex items-center gap-2">
@@ -625,8 +686,8 @@ export default function Page() {
                             key={range}
                             onClick={() => setTxRange(range)}
                             className={`px-3 py-1 text-xs rounded-lg transition-colors ${txRange === range
-                                ? "bg-white/10 border border-white/30"
-                                : "bg-white/5 border border-white/10 hover:bg-white/8"
+                              ? "bg-white/10 border border-white/30"
+                              : "bg-white/5 border border-white/10 hover:bg-white/8"
                               }`}
                           >
                             {range === "all" ? "All" : range === "1d" ? "1 day" : range === "3d" ? "3 days" : range === "7d" ? "7 days" : range === "30d" ? "30 days" : range === "90d" ? "3 months" : "1 year"}
@@ -643,7 +704,7 @@ export default function Page() {
                           const categoryColor = tx.categoryColor || (tx.category ? getCategoryColor(tx.category) : null);
                           const isNew = newTransactionIds.has(tx.id);
                           return (
-                            <div key={tx.id} className={`flex items-center justify-between relative rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5 transition-all duration-200 hover:bg-white/5 hover:border-white/10 ${isNew ? 'border-cyan-400/30 bg-cyan-400/5' : ''}`}>
+                            <div key={tx.id} className={`group flex items-center justify-between relative rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5 transition-all duration-200 hover:bg-white/5 hover:border-white/10 ${isNew ? 'border-cyan-400/30 bg-cyan-400/5' : ''}`}>
                               {isNew && (
                                 <div key={`indicator-${tx.id}`} className="absolute left-0 top-0 bottom-0 w-1.5 bg-cyan-400 rounded-l-lg new-transaction-indicator"></div>
                               )}
@@ -662,6 +723,11 @@ export default function Page() {
                                 <span className={`font-semibold text-sm ${tx.type === "credit" ? "text-green-400" : "text-rose-300"}`}>
                                   {tx.type === "credit" ? "+" : "-"}€{formatEuro(tx.amount)}
                                 </span>
+                                {isNew && tx.id === newestTransactionId && (
+                                  <span className="ml-1 rounded-full border border-cyan-400/40 bg-cyan-400/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-200 transition-opacity duration-200 group-hover:opacity-0">
+                                    NEW
+                                  </span>
+                                )}
                               </div>
                             </div>
                           );
@@ -701,15 +767,14 @@ export default function Page() {
                           }
                           setSelectedTicket({ id: ticket.id, subject: ticket.subject, status: ticket.status });
                         }}
-                        className={`rounded-2xl bg-gradient-to-r from-slate-800/60 to-slate-900/60 border px-4 py-3 flex items-center justify-between cursor-pointer hover:from-slate-700/60 hover:to-slate-800/60 transition-all duration-200 hover:shadow-lg ${
-                          ticketStatus !== "all" && ticket.status === ticketStatus
+                        className={`rounded-2xl bg-gradient-to-r from-slate-800/60 to-slate-900/60 border px-4 py-3 flex items-center justify-between cursor-pointer hover:from-slate-700/60 hover:to-slate-800/60 transition-all duration-200 hover:shadow-lg ${ticketStatus !== "all" && ticket.status === ticketStatus
                             ? ticketStatus === "open"
                               ? "border-cyan-400/50 shadow-lg shadow-cyan-500/20"
                               : ticketStatus === "pending"
-                              ? "border-amber-400/50 shadow-lg shadow-amber-500/20"
-                              : "border-slate-400/50 shadow-lg shadow-slate-500/20"
+                                ? "border-amber-400/50 shadow-lg shadow-amber-500/20"
+                                : "border-slate-400/50 shadow-lg shadow-slate-500/20"
                             : "border-white/10 hover:border-cyan-400/30 hover:shadow-cyan-500/10"
-                        }`}
+                          }`}
                       >
                         <div className="flex-1">
                           <p className="font-semibold text-slate-100">{ticket.subject}</p>
@@ -719,16 +784,16 @@ export default function Page() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className={`px-3 py-1.5 rounded-2xl text-xs font-medium ${ticket.status === 'open' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' :
-                              ticket.status === 'pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                                ticket.status === 'closed' ? 'bg-slate-500/20 text-slate-400 border border-slate-500/30' :
-                                  'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                            ticket.status === 'pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                              ticket.status === 'closed' ? 'bg-slate-500/20 text-slate-400 border border-slate-500/30' :
+                                'bg-slate-500/20 text-slate-400 border border-slate-500/30'
                             }`}>
                             {ticket.status.toUpperCase()}
                           </span>
                           {ticket.priority && (
                             <span className={`px-2.5 py-1 rounded-xl text-xs font-medium ${ticket.priority === 'high' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
-                                ticket.priority === 'medium' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                                  'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                              ticket.priority === 'medium' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                                'bg-slate-500/20 text-slate-400 border border-slate-500/30'
                               }`}>
                               {ticket.priority}
                             </span>
@@ -793,15 +858,14 @@ export default function Page() {
                         setSelectedTicket({ id: ticket.id, subject: ticket.subject, status: ticket.status });
                       }
                     }}
-                    className={`rounded-2xl bg-slate/50 border px-4 py-3 flex items-center justify-between cursor-pointer transition-colors ${
-                      ticketStatus !== "all" && ticket.status === ticketStatus
+                    className={`rounded-2xl bg-slate/50 border px-4 py-3 flex items-center justify-between cursor-pointer transition-colors ${ticketStatus !== "all" && ticket.status === ticketStatus
                         ? ticketStatus === "open"
                           ? "border-cyan-400/50 bg-cyan-500/10 hover:bg-cyan-500/15"
                           : ticketStatus === "pending"
-                          ? "border-amber-400/50 bg-amber-500/10 hover:bg-amber-500/15"
-                          : "border-slate-400/50 bg-slate-500/10 hover:bg-slate-500/15"
+                            ? "border-amber-400/50 bg-amber-500/10 hover:bg-amber-500/15"
+                            : "border-slate-400/50 bg-slate-500/10 hover:bg-slate-500/15"
                         : "border-white/5 hover:bg-white/5"
-                    }`}
+                      }`}
                   >
                     <div>
                       <p className="font-medium">{ticket.subject}</p>
@@ -980,8 +1044,8 @@ function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
               key={tf}
               onClick={() => setTimeframe(tf)}
               className={`px-3 py-1 text-xs rounded-lg transition-colors ${timeframe === tf
-                  ? "bg-white/10 border border-white/30"
-                  : "bg-white/5 border border-white/10 hover:bg-white/8"
+                ? "bg-white/10 border border-white/30"
+                : "bg-white/5 border border-white/10 hover:bg-white/8"
                 }`}
             >
               {tf === "7d" ? "Week" : tf === "30d" ? "Month" : tf === "90d" ? "Quarter" : tf === "365d" ? "Year" : "All"}
