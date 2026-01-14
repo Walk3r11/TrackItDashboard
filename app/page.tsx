@@ -75,13 +75,20 @@ export default function Page() {
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const userSectionRef = useRef<HTMLElement | null>(null);
-  const getAuthToken = () =>
-    authToken ?? (typeof window !== "undefined" ? window.localStorage.getItem(authStorageKey) : null);
+  const getAuthToken = () => {
+    if (authToken) return authToken;
+    if (typeof window === "undefined") return null;
+    const stored = window.localStorage.getItem(authStorageKey);
+    if (stored) return stored;
+    const cookieToken = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("auth-token="))
+      ?.split("=")[1];
+    return cookieToken ?? null;
+  };
 
   useEffect(() => {
-    const storedToken = typeof window !== "undefined"
-      ? window.localStorage.getItem(authStorageKey)
-      : null;
+    const storedToken = getAuthToken();
 
     if (!storedToken) {
       setAuthLoading(false);

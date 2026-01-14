@@ -51,7 +51,10 @@ export default function TicketChat({
   const storageToken = typeof window !== "undefined"
     ? window.localStorage.getItem("trackit_dashboard_token")
     : null;
-  const token = authToken ?? storageToken ?? "";
+  const cookieToken = typeof document !== "undefined"
+    ? document.cookie.split("; ").find((row) => row.startsWith("auth-token="))?.split("=")[1]
+    : null;
+  const token = authToken ?? storageToken ?? cookieToken ?? "";
 
   const handleClose = () => {
     setIsClosing(true);

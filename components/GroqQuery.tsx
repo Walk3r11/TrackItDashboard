@@ -25,10 +25,16 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const optimisticUserMessageRef = useRef<string | null>(null);
   const optimisticAssistantMessageRef = useRef<string | null>(null);
-  const getToken = useCallback(
-    () => (typeof window !== "undefined" ? window.localStorage.getItem("trackit_dashboard_token") : null),
-    []
-  );
+  const getToken = useCallback(() => {
+    if (typeof window === "undefined") return null;
+    const stored = window.localStorage.getItem("trackit_dashboard_token");
+    if (stored) return stored;
+    const cookieToken = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("auth-token="))
+      ?.split("=")[1];
+    return cookieToken ?? null;
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

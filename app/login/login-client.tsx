@@ -42,6 +42,7 @@ export default function LoginClient() {
 
       if (data.token) {
         localStorage.setItem("trackit_dashboard_token", data.token);
+        document.cookie = `auth-token=${data.token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax; Secure`;
       }
 
       router.push("/");
