@@ -11,6 +11,8 @@ type Message = {
   sender_type: "user" | "support";
   content: string;
   created_at: string;
+  read_by_user_at?: string | null;
+  read_by_support_at?: string | null;
 };
 
 type TicketChatProps = {
@@ -63,6 +65,22 @@ export default function TicketChat({
     }, 300);
   };
 
+  const markReadSupport = useCallback(async () => {
+    if (!ticketId || !userId || !token) return;
+    try {
+      await fetch(
+        `${apiBase}/api/tickets/${ticketId}/messages/read?supportUserId=${userId}&reader=support`,
+        {
+          method: "POST",
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+    } catch (err) {
+    }
+  }, [apiBase, ticketId, userId, token]);
+
   const loadMessages = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -83,12 +101,13 @@ export default function TicketChat({
       loadedMessages.forEach((msg: Message) => {
         processedMessageIdsRef.current.add(msg.id);
       });
+      await markReadSupport();
     } catch (err) {
       setError("Failed to load messages");
     } finally {
       setLoading(false);
     }
-  }, [apiBase, ticketId, userId, token]);
+  }, [apiBase, ticketId, userId, token, markReadSupport]);
 
   const scrollToBottom = useCallback((force = false) => {
     if (messagesContainerRef.current) {
@@ -150,6 +169,9 @@ export default function TicketChat({
       });
       
       setTimeout(() => scrollToBottom(true), 50);
+      if (message.message.sender_type === "user") {
+        markReadSupport();
+      }
     } else if (message.type === "status" && message.status) {
       setTicketStatus(message.status);
       onStatusChange(message.status);
