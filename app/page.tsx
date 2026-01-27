@@ -52,6 +52,26 @@ const buildAuthHeaders = (token: string | null, extra?: HeadersInit): HeadersIni
   ...(token ? { Authorization: `Bearer ${token}` } : {}),
 });
 
+const getTransactionId = (tx: any): string | null => {
+  if (!tx) return null;
+  return tx.id ?? tx.transactionId ?? tx.transaction_id ?? tx.txId ?? null;
+};
+
+const normalizeTransaction = (tx: any): TransactionItem | null => {
+  const id = getTransactionId(tx);
+  if (!id) return null;
+  const amount = typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0);
+  return {
+    id,
+    title: tx.title ?? tx.category ?? tx.merchant ?? "Transaction",
+    amount,
+    date: tx.date ?? tx.createdAt ?? tx.created_at ?? tx.postedAt ?? new Date().toISOString(),
+    type: tx.type ?? (amount >= 0 ? "credit" : "debit"),
+    category: tx.category ?? tx.category_name ?? undefined,
+    categoryColor: tx.categoryColor ?? tx.category_color ?? undefined
+  };
+};
+
 export default function Page() {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -228,7 +248,9 @@ export default function Page() {
   const loadTickets = useCallback(async (userId: string) => {
     try {
       const base = apiBase;
-      const url = `${base}/api/tickets?userId=${encodeURIComponent(userId)}`;
+      const url = new URL(`${base}/api/tickets`);
+      url.searchParams.set("userId", userId);
+      url.searchParams.set("ts", Date.now().toString());
       const res = await fetch(url, {
         cache: "no-store",
         headers: buildAuthHeaders(getAuthToken()),
@@ -255,22 +277,18 @@ export default function Page() {
   const loadTransactions = useCallback(async (userId: string) => {
     try {
       const base = apiBase;
-      const url = `${base}/api/transactions?userId=${encodeURIComponent(userId)}`;
+      const url = new URL(`${base}/api/transactions`);
+      url.searchParams.set("userId", userId);
+      url.searchParams.set("ts", Date.now().toString());
       const res = await fetch(url, {
         cache: "no-store",
         headers: buildAuthHeaders(getAuthToken()),
       });
       if (!res.ok) throw new Error("Transactions request failed");
       const body = await res.json();
-      const mapped: TransactionItem[] = (body.transactions ?? []).map((tx: any) => ({
-        id: tx.id,
-        title: tx.category ?? "Transaction",
-        amount: typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0),
-        date: tx.createdAt ?? tx.created_at ?? tx.date ?? new Date().toISOString(),
-        type: (typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0)) >= 0 ? "credit" : "debit",
-        category: tx.category ?? undefined,
-        categoryColor: tx.categoryColor ?? undefined
-      }));
+      const mapped = (body.transactions ?? [])
+        .map((tx: any) => normalizeTransaction(tx))
+        .filter((tx: TransactionItem | null): tx is TransactionItem => Boolean(tx));
       setTransactions(mapped);
     } catch (err) {
       setTransactions([]);
@@ -280,7 +298,9 @@ export default function Page() {
   const loadCards = useCallback(async (userId: string) => {
     try {
       const base = apiBase;
-      const url = `${base}/api/cards?userId=${encodeURIComponent(userId)}`;
+      const url = new URL(`${base}/api/cards`);
+      url.searchParams.set("userId", userId);
+      url.searchParams.set("ts", Date.now().toString());
       const res = await fetch(url, {
         cache: "no-store",
         headers: buildAuthHeaders(getAuthToken()),
@@ -319,43 +339,50 @@ export default function Page() {
   }, [user?.id, loadTickets, loadTransactions, loadCards]);
 
   const handleTransactionMessage = useCallback((message: any) => {
-    if (message.type !== "transaction" || !message.data) return;
-    const tx = message.data;
-    if (!tx.id) return;
+    const type = typeof message?.type === "string" ? message.type : "";
+    const isTransaction = type.startsWith("transaction") || type.startsWith("transactions");
+    if (!isTransaction || !message.data) return;
+    const payload = message.data?.transaction ?? message.data;
+    const items = Array.isArray(payload) ? payload : [payload];
+    const mappedItems = items
+      .map((tx) => normalizeTransaction(tx))
+      .filter((tx): tx is TransactionItem => Boolean(tx));
+    if (!mappedItems.length) return;
 
-    const amount = typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0);
-    const mappedTx: TransactionItem = {
-      id: tx.id,
-      title: tx.category ?? tx.title ?? "Transaction",
-      amount,
-      date: tx.date ?? tx.createdAt ?? tx.created_at ?? new Date().toISOString(),
-      type: tx.type ?? (amount >= 0 ? "credit" : "debit"),
-      category: tx.category ?? undefined,
-      categoryColor: tx.categoryColor ?? undefined
-    };
+    const newItems: TransactionItem[] = [];
 
     setTransactions((prev) => {
-      const exists = prev.some((t) => t.id === mappedTx.id);
-      if (exists) return prev;
-      return [mappedTx, ...prev];
+      const existingIds = new Set(prev.map((t) => t.id));
+      mappedItems.forEach((tx) => {
+        if (!existingIds.has(tx.id)) {
+          newItems.push(tx);
+          existingIds.add(tx.id);
+        }
+      });
+      if (!newItems.length) return prev;
+      return [...newItems, ...prev];
     });
 
+    if (!newItems.length) return;
+
     setNewTransactionIds((ids) => {
-      if (ids.has(mappedTx.id)) return ids;
-      const newIds = new Set([...ids, mappedTx.id]);
+      const newIds = new Set(ids);
+      newItems.forEach((tx) => newIds.add(tx.id));
       setNewTransactionCount(newIds.size);
-      setNewestTransactionId(mappedTx.id);
-      setTimeout(() => {
-        setNewTransactionIds((currentIds) => {
-          const newSet = new Set(currentIds);
-          newSet.delete(mappedTx.id);
-          setNewTransactionCount(newSet.size);
-          setNewestTransactionId((currentNewest) => (
-            currentNewest === mappedTx.id ? null : currentNewest
-          ));
-          return newSet;
-        });
-      }, 10000);
+      setNewestTransactionId(newItems[0].id);
+      newItems.forEach((tx) => {
+        setTimeout(() => {
+          setNewTransactionIds((currentIds) => {
+            const nextIds = new Set(currentIds);
+            nextIds.delete(tx.id);
+            setNewTransactionCount(nextIds.size);
+            setNewestTransactionId((currentNewest) => (
+              currentNewest === tx.id ? null : currentNewest
+            ));
+            return nextIds;
+          });
+        }, 10000);
+      });
       if (user) {
         setNewTransactionUser(user.name || user.email);
         setTimeout(() => setNewTransactionUser(null), 5000);
