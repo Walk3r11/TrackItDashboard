@@ -29,20 +29,20 @@ export function Sparkline({ data, className }: SparklineProps) {
     <svg viewBox="0 0 100 110" className={className} preserveAspectRatio="none">
       <defs>
         <linearGradient id="sparklineGradient" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#4fd1c5" stopOpacity="0.7" />
-          <stop offset="100%" stopColor="#4fd1c5" stopOpacity="0" />
+          <stop offset="0%" stopColor="#0b0b0b" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#0b0b0b" stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={areaPath} fill="url(#sparklineGradient)" stroke="none" />
       <polyline
         points={linePoints}
         fill="none"
-        stroke="#b0ff6d"
+        stroke="#0b0b0b"
         strokeWidth="2"
         strokeLinejoin="round"
         strokeLinecap="round"
       />
-      <circle cx={lastPoint.x} cy={lastPoint.y} r="2.5" fill="#b0ff6d" />
+      <circle cx={lastPoint.x} cy={lastPoint.y} r="2.5" fill="#0b0b0b" />
     </svg>
   );
 }

@@ -259,8 +259,8 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
   if (initialLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full w-full min-h-[500px]">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
-        <p className="text-sm text-slate-400 mt-4">Loading chat history...</p>
+        <Loader2 className="h-8 w-8 animate-spin text-ink" />
+        <p className="text-sm text-subtle mt-4">Loading chat history...</p>
       </div>
     );
   }
@@ -268,8 +268,8 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
   if (!userId) {
     return (
       <div className="flex flex-col items-center justify-center h-full w-full min-h-[500px]">
-        <Bot className="h-12 w-12 text-cyan-300" />
-        <p className="text-sm text-slate-400 mt-4">No user selected</p>
+        <Bot className="h-12 w-12 text-ink" />
+        <p className="text-sm text-subtle mt-4">No user selected</p>
       </div>
     );
   }
@@ -279,12 +279,12 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
       <div className="flex-1 overflow-y-auto space-y-4 p-4 scroll-accent min-h-[400px]">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center space-y-4 py-20">
-            <Bot className="h-12 w-12 text-cyan-300" />
+            <Bot className="h-12 w-12 text-ink" />
             <div>
-              <p className="text-lg font-semibold text-slate-200">
+              <p className="text-lg font-semibold text-ink">
                 Ask AI about user data
               </p>
-              <p className="text-sm text-slate-400 mt-2">
+              <p className="text-sm text-subtle mt-2">
                 Ask questions about the user&apos;s transactions, spending patterns, categories, and financial data.
               </p>
             </div>
@@ -298,55 +298,55 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
               <div
                 className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                   msg.role === "user"
-                    ? "bg-gradient-to-r from-cyan-300 to-sky-400 text-slate-900"
-                    : "bg-white/5 border border-white/10 text-slate-200"
+                    ? "bg-black text-white"
+                    : "bg-white/85 border border-black/10 text-ink"
                 }`}
               >
                 {msg.role === "assistant" ? (
-                  <div className="text-sm text-slate-200 [&_br]:block [&_br]:leading-4">
+                  <div className="text-sm text-ink [&_br]:block [&_br]:leading-4">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       rehypePlugins={[rehypeRaw]}
                       components={{
-                        h1: ({ node, ...props }) => <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0 text-slate-200" {...props} />,
-                        h2: ({ node, ...props }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0 text-slate-200" {...props} />,
-                        h3: ({ node, ...props }) => <h3 className="text-sm font-bold mb-1 mt-2 first:mt-0 text-slate-200" {...props} />,
-                        p: ({ node, ...props }) => <p className="mb-2 last:mb-0 text-slate-200 leading-relaxed" {...props} />,
-                        strong: ({ node, ...props }) => <strong className="font-semibold text-slate-100" {...props} />,
-                        em: ({ node, ...props }) => <em className="italic text-slate-200" {...props} />,
+                        h1: ({ node, ...props }) => <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0 text-ink" {...props} />,
+                        h2: ({ node, ...props }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0 text-ink" {...props} />,
+                        h3: ({ node, ...props }) => <h3 className="text-sm font-bold mb-1 mt-2 first:mt-0 text-ink" {...props} />,
+                        p: ({ node, ...props }) => <p className="mb-2 last:mb-0 text-ink leading-relaxed" {...props} />,
+                        strong: ({ node, ...props }) => <strong className="font-semibold text-ink" {...props} />,
+                        em: ({ node, ...props }) => <em className="italic text-ink" {...props} />,
                         code: ({ node, inline, ...props }: any) =>
                           inline ? (
-                            <code className="bg-white/10 text-cyan-300 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
+                            <code className="bg-black/5 text-ink px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
                           ) : (
-                            <code className="block bg-white/5 border border-white/10 rounded p-2 overflow-x-auto text-xs font-mono mb-2" {...props} />
+                            <code className="block bg-black/5 border border-black/10 rounded p-2 overflow-x-auto text-xs font-mono mb-2" {...props} />
                           ),
                         pre: ({ node, ...props }) => (
-                          <pre className="bg-white/5 border border-white/10 rounded p-2 overflow-x-auto mb-2 text-xs" {...props} />
+                          <pre className="bg-black/5 border border-black/10 rounded p-2 overflow-x-auto mb-2 text-xs" {...props} />
                         ),
-                        ul: ({ node, ...props }) => <ul className="list-disc list-inside mb-2 space-y-1 text-slate-200 ml-2" {...props} />,
-                        ol: ({ node, ...props }) => <ol className="list-decimal list-inside mb-2 space-y-1 text-slate-200 ml-2" {...props} />,
-                        li: ({ node, ...props }) => <li className="text-slate-200" {...props} />,
+                        ul: ({ node, ...props }) => <ul className="list-disc list-inside mb-2 space-y-1 text-ink ml-2" {...props} />,
+                        ol: ({ node, ...props }) => <ol className="list-decimal list-inside mb-2 space-y-1 text-ink ml-2" {...props} />,
+                        li: ({ node, ...props }) => <li className="text-ink" {...props} />,
                         blockquote: ({ node, ...props }) => (
-                          <blockquote className="border-l-4 border-slate-600 pl-3 italic text-slate-300 my-2" {...props} />
+                          <blockquote className="border-l-4 border-black/20 pl-3 italic text-muted my-2" {...props} />
                         ),
                         a: ({ node, ...props }) => (
-                          <a className="text-cyan-300 hover:text-cyan-200 underline" target="_blank" rel="noopener noreferrer" {...props} />
+                          <a className="text-ink underline hover:text-black/70" target="_blank" rel="noopener noreferrer" {...props} />
                         ),
                         table: ({ node, ...props }) => (
                           <div className="overflow-x-auto my-3">
-                            <table className="min-w-full border-collapse border border-white/20" {...props} />
+                            <table className="min-w-full border-collapse border border-black/10" {...props} />
                           </div>
                         ),
-                        thead: ({ node, ...props }) => <thead className="bg-white/10" {...props} />,
+                        thead: ({ node, ...props }) => <thead className="bg-black/5" {...props} />,
                         tbody: ({ node, ...props }) => <tbody {...props} />,
-                        tr: ({ node, ...props }) => <tr className="border-b border-white/20 hover:bg-white/5" {...props} />,
+                        tr: ({ node, ...props }) => <tr className="border-b border-black/10 hover:bg-black/5" {...props} />,
                         th: ({ node, ...props }) => (
-                          <th className="border border-white/20 px-3 py-2 text-left font-semibold text-slate-200" {...props} />
+                          <th className="border border-black/10 px-3 py-2 text-left font-semibold text-ink" {...props} />
                         ),
                         td: ({ node, ...props }) => (
-                          <td className="border border-white/20 px-3 py-2 text-slate-200 [&_br]:block [&_br]:mb-1" {...props} />
+                          <td className="border border-black/10 px-3 py-2 text-ink [&_br]:block [&_br]:mb-1" {...props} />
                         ),
-                        hr: ({ node, ...props }) => <hr className="border-white/20 my-3" {...props} />,
+                        hr: ({ node, ...props }) => <hr className="border-black/10 my-3" {...props} />,
                       }}
                     >
                       {msg.content}
@@ -361,28 +361,28 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
         )}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
-              <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+            <div className="bg-white/85 border border-black/10 rounded-2xl px-4 py-3">
+              <Loader2 className="h-5 w-5 animate-spin text-ink" />
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t border-white/10 p-4">
+      <form onSubmit={handleSubmit} className="border-t border-black/10 p-4">
         <div className="flex gap-3">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about user data..."
-            className="flex-1 rounded-2xl bg-white/5 border border-white/15 px-4 py-3 text-sm text-slate-200 outline-none focus:border-cyan-300/60 focus:bg-white/10"
+            className="input-field flex-1 rounded-2xl px-4 py-3 text-sm outline-none"
             disabled={loading}
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="rounded-2xl bg-gradient-to-r from-cyan-300 to-sky-400 text-slate-900 font-semibold px-6 py-3 text-sm shadow-lg shadow-cyan-500/30 disabled:opacity-60 disabled:cursor-not-allowed glow-hover flex items-center gap-2"
+            className="button-primary rounded-2xl font-semibold px-6 py-3 text-sm disabled:opacity-60 disabled:cursor-not-allowed glow-hover flex items-center gap-2"
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />

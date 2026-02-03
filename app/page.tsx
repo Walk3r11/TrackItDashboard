@@ -482,7 +482,7 @@ export default function Page() {
       <main className="relative overflow-hidden min-h-screen">
         <div className="grid-overlay" />
         <div className="max-w-6xl mx-auto px-6 py-10 space-y-10 relative z-10 fade-in flex items-center justify-center min-h-screen">
-          <div className="text-slate-300">Loading...</div>
+          <div className="text-muted">Loading...</div>
         </div>
       </main>
     );
@@ -494,8 +494,8 @@ export default function Page() {
       <div className="max-w-6xl mx-auto px-6 py-10 space-y-10 relative z-10 fade-in">
         <header className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between slide-up">
           <div className="space-y-4 flex-1">
-            <div className="pill inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-200 glow-hover">
-              <Zap className="h-4 w-4 text-lime-300" />
+            <div className="pill inline-flex items-center gap-2 px-4 py-2 text-sm glow-hover">
+              <Zap className="h-4 w-4 text-ink" />
               Finance cockpit for TrackIt app
             </div>
             <div className="space-y-2">
@@ -503,7 +503,7 @@ export default function Page() {
                 TrackIt control deck
               </h1>
             </div>
-            <div className="flex flex-wrap gap-3 text-sm text-slate-300">
+            <div className="flex flex-wrap gap-3 text-sm text-muted">
               <span className="pill px-3 py-1">Ticket Support</span>
               <span className="pill px-3 py-1">User Lookup</span>
               <span className="pill px-3 py-1">Tracker</span>
@@ -513,7 +513,7 @@ export default function Page() {
             <div className="flex items-start">
               <button
                 onClick={handleLogout}
-                className="pill inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition-colors"
+                className="pill inline-flex items-center gap-2 px-4 py-2 text-sm hover:bg-black/5 transition-colors"
               >
                 <LogOut className="h-4 w-4" />
                 Logout
@@ -525,27 +525,27 @@ export default function Page() {
         <section className="card-surface rounded-3xl p-6 slide-up">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm text-slate-400">User lookup</p>
+              <p className="text-sm text-subtle">User lookup</p>
               <p className="text-lg font-semibold">Search by email</p>
             </div>
-            <Users className="h-6 w-6 text-sky-300" />
+            <Users className="h-6 w-6 text-ink" />
           </div>
           <form onSubmit={handleSearch} className="mt-4 flex flex-col gap-3 sm:flex-row">
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="customer@example.com"
-              className="w-full rounded-2xl bg-white/5 border border-white/15 px-4 py-3 text-sm outline-none focus:border-cyan-300/60 focus:bg-white/10"
+              className="input-field w-full rounded-2xl px-4 py-3 text-sm outline-none"
             />
             <button
               type="submit"
               disabled={loading}
-              className="min-w-[140px] rounded-2xl bg-gradient-to-r from-cyan-300 to-sky-400 text-slate-900 font-semibold px-4 py-3 text-sm shadow-lg shadow-cyan-500/30 disabled:opacity-60 glow-hover"
+              className="button-primary min-w-[140px] rounded-2xl font-semibold px-4 py-3 text-sm disabled:opacity-60 glow-hover"
             >
               {loading ? "Searching..." : "Find user"}
             </button>
           </form>
-          {error && <p className="mt-3 text-sm text-rose-300">{error}</p>}
+          {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
         </section>
 
         {user && (
@@ -558,13 +558,13 @@ export default function Page() {
           >
             <div className="flex items-center justify-between mb-6">
               <div>
-                <p className="text-sm text-slate-400">User data</p>
+                <p className="text-sm text-subtle">User data</p>
                 <p className="text-lg font-semibold">{user.name}</p>
               </div>
             </div>
 
             <div
-              className="flex gap-2 mb-6 border-b border-white/10 overflow-x-auto scrollbar-hide"
+              className="flex gap-2 mb-6 border-b border-black/10 overflow-x-auto scrollbar-hide"
               ref={(el) => {
                 if (el) {
                   const activeButton = el.querySelector(`[data-tab="${activeTab}"]`) as HTMLElement;
@@ -588,8 +588,8 @@ export default function Page() {
                   }, 150);
                 }}
                 className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "overview"
-                  ? "text-cyan-300 border-b-2 border-cyan-300"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "text-ink border-b-2 border-black"
+                  : "text-subtle hover:text-ink"
                   }`}
               >
                 Overview
@@ -604,8 +604,8 @@ export default function Page() {
                   }, 150);
                 }}
                 className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "tickets"
-                  ? "text-cyan-300 border-b-2 border-cyan-300"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "text-ink border-b-2 border-black"
+                  : "text-subtle hover:text-ink"
                   }`}
               >
                 <span className="flex items-center gap-2">
@@ -620,8 +620,8 @@ export default function Page() {
                   setIsTabTransitioning(false);
                 }}
                 className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "groq"
-                  ? "text-cyan-300 border-b-2 border-cyan-300"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "text-ink border-b-2 border-black"
+                  : "text-subtle hover:text-ink"
                   }`}
               >
                 <span className="flex items-center gap-2">
@@ -644,8 +644,8 @@ export default function Page() {
                   }, 150);
                 }}
                 className={`px-4 py-2 text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === "insights"
-                  ? "text-cyan-300 border-b-2 border-cyan-300"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "text-ink border-b-2 border-black"
+                  : "text-subtle hover:text-ink"
                   }`}
               >
                 <span className="flex items-center gap-2">
@@ -658,10 +658,10 @@ export default function Page() {
             {activeTab === "overview" && (
               <div className={`space-y-4 transition-opacity duration-300 ${isTabTransitioning ? "opacity-0" : "opacity-100"}`}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+                  <div className="rounded-2xl surface-muted p-5">
                     <div className="flex items-center justify-between">
-                      <p className="text-base text-slate-200">Cards</p>
-                      <Users className="h-5 w-5 text-sky-300" />
+                      <p className="text-base text-muted">Cards</p>
+                      <Users className="h-5 w-5 text-ink" />
                     </div>
                     <div className="mt-4 space-y-3">
                       {cards.length ? (
@@ -669,35 +669,35 @@ export default function Page() {
                           {cards.map((card) => (
                             <div key={card.id} className="flex items-center justify-between">
                               <div>
-                                <p className="font-semibold text-slate-100 text-lg">{card.name}</p>
+                                <p className="font-semibold text-ink text-lg">{card.name}</p>
                               </div>
-                              <p className="text-base text-slate-100">€{formatEuro(card.balance ?? 0)}</p>
+                              <p className="text-base text-ink">€{formatEuro(card.balance ?? 0)}</p>
                             </div>
                           ))}
-                          <div className="flex items-center justify-between pt-3 border-t border-white/10">
-                            <p className="text-base text-slate-200">Total balance</p>
-                            <p className="font-semibold text-slate-100 text-lg">
+                          <div className="flex items-center justify-between pt-3 border-t border-black/10">
+                            <p className="text-base text-muted">Total balance</p>
+                            <p className="font-semibold text-ink text-lg">
                               €{formatEuro(cards.reduce((sum, c) => sum + (c.balance ?? 0), 0))}
                             </p>
                           </div>
                         </>
                       ) : (
-                        <p className="text-sm text-slate-400">No cards available.</p>
+                        <p className="text-sm text-subtle">No cards available.</p>
                       )}
                     </div>
                   </div>
 
-                  <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+                  <div className="rounded-2xl surface-muted p-5">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
-                        <p className="text-base text-slate-200">Recent Transactions</p>
+                        <p className="text-base text-muted">Recent Transactions</p>
                         {newTransactionCount > 0 && (
-                          <span className="px-2 py-0.5 text-xs font-semibold bg-cyan-400 text-slate-900 rounded-full animate-pulse">
+                          <span className="px-2 py-0.5 text-xs font-semibold bg-black text-white rounded-full animate-pulse">
                             {newTransactionCount} new{newTransactionUser ? ` (${newTransactionUser})` : ""}
                           </span>
                         )}
                       </div>
-                      <ShieldCheck className="h-5 w-5 text-amber-300" />
+                      <ShieldCheck className="h-5 w-5 text-ink" />
                     </div>
                     <div className="mb-4 space-y-2">
                       <input
@@ -705,7 +705,7 @@ export default function Page() {
                         value={txQuery}
                         onChange={(e) => setTxQuery(e.target.value)}
                         placeholder="Search by name..."
-                        className="w-full rounded-xl bg-white/5 border border-white/15 px-3 py-2 text-sm outline-none focus:border-cyan-300/60 focus:bg-white/10"
+                        className="input-field w-full rounded-xl px-3 py-2 text-sm outline-none"
                       />
                       <div className="flex gap-2 flex-wrap">
                         {(["all", "1d", "3d", "7d", "30d", "90d", "365d"] as const).map((range) => (
@@ -713,8 +713,8 @@ export default function Page() {
                             key={range}
                             onClick={() => setTxRange(range)}
                             className={`px-3 py-1 text-xs rounded-lg transition-colors ${txRange === range
-                              ? "bg-white/10 border border-white/30"
-                              : "bg-white/5 border border-white/10 hover:bg-white/8"
+                              ? "pill bg-black/10 border-black/30"
+                              : "pill bg-black/5 border-black/10 hover:bg-black/10"
                               }`}
                           >
                             {range === "all" ? "All" : range === "1d" ? "1 day" : range === "3d" ? "3 days" : range === "7d" ? "7 days" : range === "30d" ? "30 days" : range === "90d" ? "3 months" : "1 year"}
@@ -731,27 +731,27 @@ export default function Page() {
                           const categoryColor = tx.categoryColor || (tx.category ? getCategoryColor(tx.category) : null);
                           const isNew = newTransactionIds.has(tx.id);
                           return (
-                            <div key={tx.id} className={`group flex items-center justify-between relative rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5 transition-all duration-200 hover:bg-white/5 hover:border-white/10 ${isNew ? 'border-cyan-400/30 bg-cyan-400/5' : ''}`}>
+                            <div key={tx.id} className={`group flex items-center justify-between relative rounded-lg border border-black/5 bg-white/70 px-3 py-2.5 transition-all duration-200 hover:bg-white hover:border-black/10 ${isNew ? 'border-black/20 bg-black/[0.03]' : ''}`}>
                               {isNew && (
-                                <div key={`indicator-${tx.id}`} className="absolute left-0 top-0 bottom-0 w-1.5 bg-cyan-400 rounded-l-lg new-transaction-indicator"></div>
+                                <div key={`indicator-${tx.id}`} className="absolute left-0 top-0 bottom-0 w-1.5 bg-black rounded-l-lg new-transaction-indicator"></div>
                               )}
                               <div className={`flex-1 transition-all duration-300 ${isNew ? 'pl-3' : ''}`}>
                                 <p
                                   className="font-semibold text-sm"
-                                  style={{ color: categoryColor || "#e2e8f0" }}
+                                  style={{ color: categoryColor || "#0b0b0b" }}
                                 >
                                   {tx.title}
                                 </p>
-                                <p className="text-xs text-slate-400">
+                                <p className="text-xs text-subtle">
                                   {tx.category ? `${tx.category} • ` : ""}{formatShortDate(tx.date)}
                                 </p>
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className={`font-semibold text-sm ${tx.type === "credit" ? "text-green-400" : "text-rose-300"}`}>
+                                <span className={`font-semibold text-sm ${tx.type === "credit" ? "text-emerald-700" : "text-rose-700"}`}>
                                   {tx.type === "credit" ? "+" : "-"}€{formatEuro(tx.amount)}
                                 </span>
                                 {isNew && tx.id === newestTransactionId && (
-                                  <span className="ml-1 rounded-full border border-cyan-400/40 bg-cyan-400/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-200 transition-opacity duration-200 group-hover:opacity-0">
+                                  <span className="ml-1 rounded-full border border-black/30 bg-black/10 px-2 py-0.5 text-[10px] font-semibold text-ink transition-opacity duration-200 group-hover:opacity-0">
                                     NEW
                                   </span>
                                 )}
@@ -760,7 +760,7 @@ export default function Page() {
                           );
                         })
                       ) : (
-                        <p className="text-sm text-slate-400">No transactions found.</p>
+                        <p className="text-sm text-subtle">No transactions found.</p>
                       )}
                     </div>
                   </div>
@@ -775,7 +775,7 @@ export default function Page() {
                     <button
                       key={status}
                       onClick={() => setTicketStatus(status)}
-                      className={`pill px-3 py-2 capitalize ${ticketStatus === status ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10"
+                      className={`pill px-3 py-2 capitalize ${ticketStatus === status ? "bg-black/10 border-black/30" : "bg-black/5 border-black/10"
                         }`}
                     >
                       {status}
@@ -794,33 +794,33 @@ export default function Page() {
                           }
                           setSelectedTicket({ id: ticket.id, subject: ticket.subject, status: ticket.status });
                         }}
-                        className={`rounded-2xl bg-gradient-to-r from-slate-800/60 to-slate-900/60 border px-4 py-3 flex items-center justify-between cursor-pointer hover:from-slate-700/60 hover:to-slate-800/60 transition-all duration-200 hover:shadow-lg ${ticketStatus !== "all" && ticket.status === ticketStatus
+                        className={`rounded-2xl bg-white/85 border px-4 py-3 flex items-center justify-between cursor-pointer transition-all duration-200 hover:shadow-lg ${ticketStatus !== "all" && ticket.status === ticketStatus
                             ? ticketStatus === "open"
-                              ? "border-cyan-400/50 shadow-lg shadow-cyan-500/20"
+                              ? "border-emerald-300/70 shadow-lg shadow-emerald-200/40"
                               : ticketStatus === "pending"
-                                ? "border-amber-400/50 shadow-lg shadow-amber-500/20"
-                                : "border-slate-400/50 shadow-lg shadow-slate-500/20"
-                            : "border-white/10 hover:border-cyan-400/30 hover:shadow-cyan-500/10"
+                                ? "border-amber-300/70 shadow-lg shadow-amber-200/40"
+                                : "border-black/20 shadow-lg shadow-black/10"
+                            : "border-black/10 hover:border-black/20"
                           }`}
                       >
                         <div className="flex-1">
-                          <p className="font-semibold text-slate-100">{ticket.subject}</p>
-                          <p className="text-xs text-slate-400 mt-1">
+                          <p className="font-semibold text-ink">{ticket.subject}</p>
+                          <p className="text-xs text-subtle mt-1">
                             Updated {formatRelative(ticket.updatedAt)}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className={`px-3 py-1.5 rounded-2xl text-xs font-medium ${ticket.status === 'open' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' :
-                            ticket.status === 'pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                              ticket.status === 'closed' ? 'bg-slate-500/20 text-slate-400 border border-slate-500/30' :
-                                'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                          <span className={`px-3 py-1.5 rounded-2xl text-xs font-medium ${ticket.status === 'open' ? 'badge badge-open' :
+                            ticket.status === 'pending' ? 'badge badge-pending' :
+                              ticket.status === 'closed' ? 'badge badge-closed' :
+                                'badge'
                             }`}>
                             {ticket.status.toUpperCase()}
                           </span>
                           {ticket.priority && (
-                            <span className={`px-2.5 py-1 rounded-xl text-xs font-medium ${ticket.priority === 'high' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
-                              ticket.priority === 'medium' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                                'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                            <span className={`px-2.5 py-1 rounded-xl text-xs font-medium ${ticket.priority === 'high' ? 'badge badge-high' :
+                              ticket.priority === 'medium' ? 'badge badge-medium' :
+                                'badge badge-low'
                               }`}>
                               {ticket.priority}
                             </span>
@@ -829,7 +829,7 @@ export default function Page() {
                       </div>
                     ))
                   ) : (
-                    <div className="text-sm text-slate-400">No tickets found.</div>
+                    <div className="text-sm text-subtle">No tickets found.</div>
                   )}
                 </div>
               </div>
@@ -853,10 +853,10 @@ export default function Page() {
           <section className="card-surface rounded-3xl p-6 slide-up">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-400">Support tickets</p>
+                <p className="text-sm text-subtle">Support tickets</p>
                 <p className="text-lg font-semibold">User conversations</p>
               </div>
-              <Ticket className="h-6 w-6 text-lime-300" />
+              <Ticket className="h-6 w-6 text-ink" />
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2 text-sm">
@@ -867,7 +867,7 @@ export default function Page() {
                     setTicketStatus(status);
                     loadAllTickets(status === "all" ? undefined : status);
                   }}
-                  className={`pill px-3 py-2 capitalize ${ticketStatus === status ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10"
+                  className={`pill px-3 py-2 capitalize ${ticketStatus === status ? "bg-black/10 border-black/30" : "bg-black/5 border-black/10"
                     }`}
                 >
                   {status}
@@ -885,18 +885,18 @@ export default function Page() {
                         setSelectedTicket({ id: ticket.id, subject: ticket.subject, status: ticket.status });
                       }
                     }}
-                    className={`rounded-2xl bg-slate/50 border px-4 py-3 flex items-center justify-between cursor-pointer transition-colors ${ticketStatus !== "all" && ticket.status === ticketStatus
+                    className={`rounded-2xl bg-white/85 border px-4 py-3 flex items-center justify-between cursor-pointer transition-colors ${ticketStatus !== "all" && ticket.status === ticketStatus
                         ? ticketStatus === "open"
-                          ? "border-cyan-400/50 bg-cyan-500/10 hover:bg-cyan-500/15"
+                          ? "border-emerald-300/70 bg-emerald-50 hover:bg-emerald-100"
                           : ticketStatus === "pending"
-                            ? "border-amber-400/50 bg-amber-500/10 hover:bg-amber-500/15"
-                            : "border-slate-400/50 bg-slate-500/10 hover:bg-slate-500/15"
-                        : "border-white/5 hover:bg-white/5"
+                            ? "border-amber-300/70 bg-amber-50 hover:bg-amber-100"
+                            : "border-black/20 bg-black/5 hover:bg-black/10"
+                        : "border-black/10 hover:bg-white"
                       }`}
                   >
                     <div>
                       <p className="font-medium">{ticket.subject}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-subtle">
                         {ticket.status.toUpperCase()} • Updated {formatRelative(ticket.updatedAt)}
                       </p>
                     </div>
@@ -906,7 +906,7 @@ export default function Page() {
                   </div>
                 ))
               ) : (
-                <div className="text-sm text-slate-400">No tickets found.</div>
+                <div className="text-sm text-subtle">No tickets found.</div>
               )}
             </div>
           </section>
@@ -1064,15 +1064,15 @@ function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-slate-100">Financial Insights</h2>
+        <h2 className="text-xl font-semibold text-ink">Financial Insights</h2>
         <div className="flex gap-2">
           {(["7d", "30d", "90d", "365d", "all"] as const).map((tf) => (
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
               className={`px-3 py-1 text-xs rounded-lg transition-colors ${timeframe === tf
-                ? "bg-white/10 border border-white/30"
-                : "bg-white/5 border border-white/10 hover:bg-white/8"
+                ? "pill bg-black/10 border-black/30"
+                : "pill bg-black/5 border-black/10 hover:bg-black/10"
                 }`}
             >
               {tf === "7d" ? "Week" : tf === "30d" ? "Month" : tf === "90d" ? "Quarter" : tf === "365d" ? "Year" : "All"}
@@ -1082,46 +1082,46 @@ function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-2xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 p-4">
-          <p className="text-sm text-slate-400">Income</p>
-          <p className="text-2xl font-bold text-green-400 mt-1">+€{formatEuro(income)}</p>
-          <p className="text-xs text-slate-500 mt-1">{incomeCount} transactions</p>
+        <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4">
+          <p className="text-sm text-subtle">Income</p>
+          <p className="text-2xl font-bold text-emerald-700 mt-1">+€{formatEuro(income)}</p>
+          <p className="text-xs text-subtle mt-1">{incomeCount} transactions</p>
         </div>
-        <div className="rounded-2xl bg-gradient-to-br from-rose-500/10 to-red-500/10 border border-rose-500/20 p-4">
-          <p className="text-sm text-slate-400">Expenses</p>
-          <p className="text-2xl font-bold text-rose-400 mt-1">-€{formatEuro(expenses)}</p>
-          <p className="text-xs text-slate-500 mt-1">{expenseCount} transactions</p>
+        <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4">
+          <p className="text-sm text-subtle">Expenses</p>
+          <p className="text-2xl font-bold text-rose-700 mt-1">-€{formatEuro(expenses)}</p>
+          <p className="text-xs text-subtle mt-1">{expenseCount} transactions</p>
         </div>
-        <div className={`rounded-2xl bg-gradient-to-br ${net >= 0 ? 'from-cyan-500/10 to-blue-500/10 border-cyan-500/20' : 'from-amber-500/10 to-orange-500/10 border-amber-500/20'} p-4`}>
-          <p className="text-sm text-slate-400">Net Balance</p>
-          <p className={`text-2xl font-bold mt-1 ${net >= 0 ? 'text-cyan-400' : 'text-amber-400'}`}>
+        <div className={`rounded-2xl ${net >= 0 ? 'bg-blue-50 border border-blue-200' : 'bg-amber-50 border border-amber-200'} p-4`}>
+          <p className="text-sm text-subtle">Net Balance</p>
+          <p className={`text-2xl font-bold mt-1 ${net >= 0 ? 'text-blue-700' : 'text-amber-700'}`}>
             {net >= 0 ? '+' : ''}€{formatEuro(net)}
           </p>
-          <p className="text-xs text-slate-500 mt-1">{totalCount} total</p>
+          <p className="text-xs text-subtle mt-1">{totalCount} total</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-2xl bg-slate-800/50 border border-white/10 p-4">
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">Statistics</h3>
+        <div className="rounded-2xl surface-muted p-4">
+          <h3 className="text-sm font-semibold text-muted mb-3">Statistics</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-slate-400">Avg Transaction</span>
-              <span className="text-slate-200">€{formatEuro(avgTransaction)}</span>
+              <span className="text-subtle">Avg Transaction</span>
+              <span className="text-ink">€{formatEuro(avgTransaction)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Transactions/Day</span>
-              <span className="text-slate-200">{transactionsPerDay.toFixed(2)}</span>
+              <span className="text-subtle">Transactions/Day</span>
+              <span className="text-ink">{transactionsPerDay.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Period</span>
-              <span className="text-slate-200">{days} days</span>
+              <span className="text-subtle">Period</span>
+              <span className="text-ink">{days} days</span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl bg-slate-800/50 border border-white/10 p-4">
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">Top Categories</h3>
+        <div className="rounded-2xl surface-muted p-4">
+          <h3 className="text-sm font-semibold text-muted mb-3">Top Categories</h3>
           <div className="space-y-2 max-h-48 overflow-y-auto scroll-accent">
             {topCategories.length > 0 ? (
               topCategories.map((cat) => (
@@ -1131,29 +1131,29 @@ function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
                       className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: getCategoryColor(cat.name) }}
                     />
-                    <span className="text-slate-300">{cat.name}</span>
+                    <span className="text-muted">{cat.name}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-slate-400 text-xs">{cat.percentage.toFixed(1)}%</span>
-                    <span className="text-slate-200">€{formatEuro(cat.amount)}</span>
+                    <span className="text-subtle text-xs">{cat.percentage.toFixed(1)}%</span>
+                    <span className="text-ink">€{formatEuro(cat.amount)}</span>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-slate-400 text-sm">No category data</p>
+              <p className="text-subtle text-sm">No category data</p>
             )}
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl bg-slate-800/50 border border-white/10 p-4">
-        <h3 className="text-sm font-semibold text-slate-300 mb-3">Largest Transactions</h3>
+      <div className="rounded-2xl surface-muted p-4">
+        <h3 className="text-sm font-semibold text-muted mb-3">Largest Transactions</h3>
         <div className="space-y-2 max-h-64 overflow-y-auto scroll-accent">
           {largestTransactions.length > 0 ? (
             largestTransactions.map((tx) => {
               const categoryColor = tx.categoryColor || (tx.category ? getCategoryColor(tx.category) : null);
               return (
-                <div key={tx.id} className="flex items-center justify-between text-sm py-2 border-b border-white/5 last:border-0">
+                <div key={tx.id} className="flex items-center justify-between text-sm py-2 border-b border-black/5 last:border-0">
                   <div className="flex items-center gap-2 flex-1">
                     {categoryColor && (
                       <div
@@ -1161,17 +1161,17 @@ function InsightsView({ transactions }: { transactions: TransactionItem[] }) {
                         style={{ backgroundColor: categoryColor }}
                       />
                     )}
-                    <span className="text-slate-300">{tx.title}</span>
-                    <span className="text-xs text-slate-500">{formatShortDate(tx.date)}</span>
+                    <span className="text-muted">{tx.title}</span>
+                    <span className="text-xs text-subtle">{formatShortDate(tx.date)}</span>
                   </div>
-                  <span className={`font-semibold ${tx.type === "credit" ? "text-green-400" : "text-rose-400"}`}>
+                  <span className={`font-semibold ${tx.type === "credit" ? "text-emerald-700" : "text-rose-700"}`}>
                     {tx.type === "credit" ? "+" : "-"}€{formatEuro(Math.abs(tx.amount))}
                   </span>
                 </div>
               );
             })
           ) : (
-            <p className="text-slate-400 text-sm">No transactions</p>
+            <p className="text-subtle text-sm">No transactions</p>
           )}
         </div>
       </div>

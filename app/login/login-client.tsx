@@ -64,38 +64,38 @@ export default function LoginClient() {
       <div className="grid-overlay" />
       <div className="max-w-md mx-auto px-6 py-12 relative z-10 fade-in">
         <header className="space-y-4 slide-up">
-          <div className="pill inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-200 glow-hover">
-            <ShieldCheck className="h-4 w-4 text-lime-300" />
+          <div className="pill pill-accent inline-flex items-center gap-2 px-4 py-2 text-sm glow-hover">
+            <ShieldCheck className="h-4 w-4 text-ink" />
             Support access
           </div>
           <h1 className="text-4xl md:text-5xl font-semibold font-display tracking-tight">Sign in</h1>
-          <p className="text-sm text-slate-300 max-w-2xl">
+          <p className="text-sm text-muted max-w-2xl">
             Access the TrackIt support dashboard with your credentials.
           </p>
         </header>
 
         <section className="mt-10 card-surface rounded-3xl p-6 md:p-8 slide-up">
           <form onSubmit={handleSubmit} className="grid gap-4">
-            <label className="grid gap-2 text-sm text-slate-200">
+            <label className="grid gap-2 text-sm text-muted">
               Email
               <input
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="h-12 rounded-2xl border border-white/15 bg-white/5 px-4 text-sm outline-none focus:border-cyan-300/60 focus:bg-white/10"
+                className="input-field h-12 rounded-2xl px-4 text-sm outline-none"
                 placeholder="support@trackit.com"
                 autoComplete="email"
                 required
               />
             </label>
 
-            <label className="grid gap-2 text-sm text-slate-200">
+            <label className="grid gap-2 text-sm text-muted">
               Password
               <input
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="h-12 rounded-2xl border border-white/15 bg-white/5 px-4 text-sm outline-none focus:border-cyan-300/60 focus:bg-white/10"
+                className="input-field h-12 rounded-2xl px-4 text-sm outline-none"
                 placeholder="Enter your password"
                 autoComplete="current-password"
                 required
@@ -105,7 +105,7 @@ export default function LoginClient() {
             <button
               type="submit"
               disabled={state === "loading"}
-              className="mt-2 h-12 rounded-2xl bg-gradient-to-r from-cyan-300 to-sky-400 text-slate-900 font-semibold px-4 text-sm shadow-lg shadow-cyan-500/30 disabled:opacity-60 glow-hover"
+              className="button-primary mt-2 h-12 rounded-2xl font-semibold px-4 text-sm disabled:opacity-60 glow-hover"
             >
               {state === "loading" ? "Signing in..." : "Sign in"}
             </button>
@@ -115,7 +115,7 @@ export default function LoginClient() {
             <div
               className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
                 state === "error"
-                  ? "border-rose-400/40 bg-rose-500/10 text-rose-100"
+                  ? "border-rose-200 bg-rose-50 text-rose-700"
                   : ""
               }`}
             >

@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Manrope } from "next/font/google";
 import "./globals.css";
-
-const display = Space_Grotesk({ subsets: ["latin"], variable: "--font-display" });
-const body = Manrope({ subsets: ["latin"], variable: "--font-body" });
 
 export const metadata: Metadata = {
   title: "TrackIt Finance Dashboard",
@@ -12,8 +8,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`}>
-      <body className="bg-ink text-white antialiased">{children}</body>
+    <html lang="en">
+      <body className="font-body text-ink antialiased">{children}</body>
     </html>
   );
 }

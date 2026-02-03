@@ -3,19 +3,18 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        ink: "#0c0c1d",
-        mist: "#0e1726",
-        lime: "#b0ff6d",
-        teal: "#4fd1c5",
-        card: "#111a2b",
-        slate: "#1b2435"
+        ink: "#0b0b0b",
+        paper: "#f7f7f2",
+        paperSoft: "#eff2f5",
+        accent: "#0b0b0b",
+        success: "#298f61",
+        danger: "#b33d38",
+        warning: "#c47d2e",
+        info: "#3366c2"
       },
       fontFamily: {
-        display: ["var(--font-display)", "sans-serif"],
-        body: ["var(--font-body)", "sans-serif"]
-      },
-      boxShadow: {
-        glow: "0 20px 60px rgba(80, 225, 182, 0.25)"
+        display: ["Avenir Next", "Avenir", "Nunito Sans", "Helvetica Neue", "sans-serif"],
+        body: ["Avenir Next", "Avenir", "Nunito Sans", "Helvetica Neue", "sans-serif"]
       },
       borderRadius: {
         xl: "24px"
