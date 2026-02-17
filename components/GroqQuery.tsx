@@ -71,14 +71,12 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
   }, [apiBase, userId, getToken]);
 
   const loadChatHistory = useCallback(async () => {
-    // Don't load user's chat history - support should have a fresh AI assistant
     setInitialLoading(false);
     setMessages([]);
     setChatId(null);
   }, []);
 
   useEffect(() => {
-    // Reset state when userId changes (tab switch)
     if (!userId) {
       setInitialLoading(false);
       return;
