@@ -412,6 +412,15 @@ export default function TicketChat({
                 {isOpeningTicket ? "Opening..." : "Open Ticket"}
               </button>
             )}
+            {ticketStatus === "open" && (
+              <button
+                onClick={closeTicket}
+                disabled={isClosingTicket}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-rose-100 text-rose-700 hover:bg-rose-200 border border-rose-200"
+              >
+                {isClosingTicket ? "Closing..." : "Close Ticket"}
+              </button>
+            )}
             <button
               onClick={handleClose}
               className="p-2 rounded-xl hover:bg-black/5 transition-all duration-200 hover:scale-110 active:scale-95"
