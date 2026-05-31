@@ -311,6 +311,119 @@ button:active {
   animation: slideInFromLeft 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
+.groq-markdown {
+  color: var(--ui-text);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.groq-markdown > *:first-child {
+  margin-top: 0;
+}
+
+.groq-markdown > *:last-child {
+  margin-bottom: 0;
+}
+
+.groq-markdown p {
+  margin: 0 0 0.65rem;
+  line-height: 1.6;
+}
+
+.groq-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.groq-markdown ul,
+.groq-markdown ol {
+  margin: 0.35rem 0 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.groq-markdown li {
+  margin: 0.2rem 0;
+}
+
+.groq-markdown li > p {
+  margin: 0;
+}
+
+.groq-markdown strong {
+  font-weight: 600;
+}
+
+.groq-markdown h1,
+.groq-markdown h2,
+.groq-markdown h3 {
+  font-weight: 600;
+  margin: 0.75rem 0 0.4rem;
+  line-height: 1.35;
+}
+
+.groq-markdown h1 { font-size: 1.05rem; }
+.groq-markdown h2 { font-size: 0.98rem; }
+.groq-markdown h3 { font-size: 0.92rem; }
+
+.groq-markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 0.35rem;
+  padding: 0.1rem 0.35rem;
+}
+
+.groq-markdown pre {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--ui-stroke);
+  overflow-x: auto;
+}
+
+.groq-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.groq-markdown blockquote {
+  margin: 0.5rem 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid rgba(0, 0, 0, 0.15);
+  color: var(--ui-text-muted);
+}
+
+.groq-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.85rem;
+}
+
+.groq-markdown th,
+.groq-markdown td {
+  border: 1px solid var(--ui-stroke);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+}
+
+.groq-markdown th {
+  background: rgba(0, 0, 0, 0.04);
+  font-weight: 600;
+}
+
+.groq-markdown a {
+  color: var(--ui-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.groq-markdown hr {
+  border: none;
+  border-top: 1px solid var(--ui-stroke);
+  margin: 0.75rem 0;
+}
+
 @supports not (animation: fadeIn) {
   .fade-in,
   .zoom-in-95,

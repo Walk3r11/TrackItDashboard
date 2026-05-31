@@ -836,7 +836,7 @@ export default function Page() {
             )}
 
             {activeTab === "groq" && user && (
-              <div className="h-[600px] flex flex-col w-full overflow-hidden relative">
+              <div className={`transition-opacity duration-300 ${isTabTransitioning ? "opacity-0" : "opacity-100"}`}>
                 <GroqQuery key={`groq-support-${user.id}`} userId={user.id} apiBase={apiBase} />
               </div>
             )}
