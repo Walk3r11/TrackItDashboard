@@ -8,14 +8,39 @@ function getJwtSecret(): Uint8Array | null {
   return new TextEncoder().encode(raw);
 }
 
+function isNextInternal(pathname: string): boolean {
+  return pathname.startsWith("/_next");
+}
+
+function isDocumentNavigation(request: NextRequest): boolean {
+  const accept = request.headers.get("accept") ?? "";
+  return accept.includes("text/html");
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (isNextInternal(pathname)) {
+    return NextResponse.next();
+  }
 
   if (pathname.startsWith("/reset-password")) {
     return NextResponse.next();
   }
 
   if (pathname.startsWith("/login")) {
+    const jwtSecret = getJwtSecret();
+    const token = request.cookies.get("auth-token")?.value;
+    if (jwtSecret && token) {
+      try {
+        const { payload } = await jwtVerify(token, jwtSecret);
+        if (payload.role === "support") {
+          return NextResponse.redirect(new URL("/", request.url));
+        }
+      } catch {
+        /* invalid cookie — stay on login */
+      }
+    }
     return NextResponse.next();
   }
 
@@ -23,7 +48,10 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get("auth-token")?.value;
 
   if (!jwtSecret || !token) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    if (isDocumentNavigation(request)) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -31,23 +59,20 @@ export async function middleware(request: NextRequest) {
     if (payload.role !== "support") {
       throw new Error("Invalid role");
     }
-    if (pathname === "/login") {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
     return NextResponse.next();
-  } catch (error) {
-    if (pathname !== "/login") {
+  } catch {
+    if (isDocumentNavigation(request)) {
       const response = NextResponse.redirect(new URL("/login", request.url));
       response.cookies.delete("auth-token");
       return response;
     }
-    return NextResponse.next();
+    const response = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    response.cookies.delete("auth-token");
+    return response;
   }
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next|favicon.ico|.*\\..*).*)"],
 };
 

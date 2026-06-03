@@ -46,13 +46,7 @@ export default function LoginClient() {
         setStoredToken(data.token);
       }
 
-      router.push("/");
-      router.refresh();
-      window.setTimeout(() => {
-        if (window.location.pathname === "/login") {
-          window.location.assign("/");
-        }
-      }, 300);
+      window.location.replace("/");
     } catch (err) {
       setState("error");
       const isAbort = err instanceof DOMException && err.name === "AbortError";

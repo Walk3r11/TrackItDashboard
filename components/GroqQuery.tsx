@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Bot, Send, Loader2, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { apiFetch, getStoredToken } from "@/lib/dashboard-api";
 
 type Message = {
   id: string;
@@ -105,16 +106,7 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  const getToken = useCallback(() => {
-    if (typeof window === "undefined") return null;
-    const stored = window.localStorage.getItem("trackit_dashboard_token");
-    if (stored) return stored;
-    const cookieToken = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("auth-token="))
-      ?.split("=")[1];
-    return cookieToken ?? null;
-  }, []);
+  const getToken = useCallback(() => getStoredToken(), []);
 
   const scrollToBottom = useCallback(() => {
     if (messagesContainerRef.current) {
@@ -130,12 +122,9 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
     try {
       const token = getToken();
       const finalChatId = chatIdToUse || crypto.randomUUID();
-      await fetch(`${apiBase}/api/chat/history?userId=${userId}`, {
+      await apiFetch(`${apiBase}/api/chat/history?userId=${userId}`, token, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: messagesToSave.map(({ role, content }) => ({ role, content })),
           chatId: finalChatId,
@@ -188,12 +177,9 @@ export default function GroqQuery({ userId, apiBase }: GroqQueryProps) {
       const token = getToken();
       const apiMessages = messagesForGroqApi(updatedMessages);
 
-      const response = await fetch(`${apiBase}/api/groq`, {
+      const response = await apiFetch(`${apiBase}/api/groq`, token, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: apiMessages,
           model: "openai/gpt-oss-120b",

@@ -1,10 +1,9 @@
 export const AUTH_STORAGE_KEY = "trackit_dashboard_token";
 
 export function getApiBase(): string {
-  return (process.env.NEXT_PUBLIC_API_BASE ?? "https://backend-production-0eac.up.railway.app").replace(
-    /\/$/,
-    ""
-  );
+  return (
+    process.env.NEXT_PUBLIC_API_BASE ?? "https://backend-production-0eac.up.railway.app"
+  ).replace(/\/$/, "");
 }
 
 export function getStoredToken(): string | null {
@@ -28,6 +27,13 @@ export function clearAuth(): void {
   document.cookie = "auth-token=; path=/; max-age=0; SameSite=Lax; Secure";
 }
 
+export function redirectToLogin(): void {
+  clearAuth();
+  if (typeof window !== "undefined") {
+    window.location.replace("/login");
+  }
+}
+
 export function buildAuthHeaders(token: string | null, extra?: HeadersInit): HeadersInit {
   return {
     ...(extra ?? {}),
@@ -47,6 +53,9 @@ export async function apiFetch(
     credentials: "include",
     cache: init?.cache ?? "no-store",
   });
-  if (res.status === 401 && onUnauthorized) onUnauthorized();
+  if (res.status === 401) {
+    if (onUnauthorized) onUnauthorized();
+    else redirectToLogin();
+  }
   return res;
 }

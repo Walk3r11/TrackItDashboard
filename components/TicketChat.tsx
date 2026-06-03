@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Send, Lock } from "lucide-react";
 import { useWebSocket } from "@/lib/useWebSocket";
+import { apiFetch, getStoredToken } from "@/lib/dashboard-api";
 
 type Message = {
   id: string;
@@ -50,13 +51,7 @@ export default function TicketChat({
   const tempMessageIdsRef = useRef<Set<string>>(new Set());
   const processedMessageIdsRef = useRef<Set<string>>(new Set());
   
-  const storageToken = typeof window !== "undefined"
-    ? window.localStorage.getItem("trackit_dashboard_token")
-    : null;
-  const cookieToken = typeof document !== "undefined"
-    ? document.cookie.split("; ").find((row) => row.startsWith("auth-token="))?.split("=")[1]
-    : null;
-  const token = authToken ?? storageToken ?? cookieToken ?? "";
+  const token = authToken ?? getStoredToken() ?? "";
 
   const handleClose = () => {
     setIsClosing(true);
@@ -68,14 +63,10 @@ export default function TicketChat({
   const markReadSupport = useCallback(async () => {
     if (!ticketId || !userId || !token) return;
     try {
-      await fetch(
+      await apiFetch(
         `${apiBase}/api/tickets/${ticketId}/messages/read?supportUserId=${userId}&reader=support`,
-        {
-          method: "POST",
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        }
+        token,
+        { method: "POST" }
       );
     } catch (err) {
     }
@@ -85,14 +76,9 @@ export default function TicketChat({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${apiBase}/api/tickets/${ticketId}/messages?supportUserId=${userId}`,
-        {
-          cache: "no-store",
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        }
+        token
       );
       if (!res.ok) throw new Error("Failed to load messages");
       const body = await res.json();
@@ -236,14 +222,12 @@ export default function TicketChat({
     setTimeout(() => scrollToBottom(true), 50);
 
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${apiBase}/api/tickets/${ticketId}/messages?supportUserId=${userId}`,
+        token,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             content: text,
             senderType: "support",
@@ -315,19 +299,11 @@ export default function TicketChat({
     setError(null);
     
     try {
-      const res = await fetch(
-        `${apiBase}/api/tickets/${ticketId}/status`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            status: "open",
-          }),
-        }
-      );
+      const res = await apiFetch(`${apiBase}/api/tickets/${ticketId}/status`, token, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "open" }),
+      });
 
       if (!res.ok) {
         const body = await res.json();
@@ -350,19 +326,11 @@ export default function TicketChat({
     setError(null);
     
     try {
-      const res = await fetch(
-        `${apiBase}/api/tickets/${ticketId}/status`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            status: "closed",
-          }),
-        }
-      );
+      const res = await apiFetch(`${apiBase}/api/tickets/${ticketId}/status`, token, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "closed" }),
+      });
 
       if (!res.ok) {
         const body = await res.json();

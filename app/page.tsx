@@ -2,15 +2,14 @@
 
 import { ShieldCheck, Ticket, Users, Zap, LogOut, Bot } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import TicketChat from "@/components/TicketChat";
 import GroqQuery from "@/components/GroqQuery";
 import { useWebSocket } from "@/lib/useWebSocket";
 import {
   apiFetch,
-  clearAuth,
   getApiBase,
   getStoredToken,
+  redirectToLogin,
   setStoredToken,
 } from "@/lib/dashboard-api";
 
@@ -74,7 +73,6 @@ const normalizeTransaction = (tx: any): TransactionItem | null => {
 };
 
 export default function Page() {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,28 +99,35 @@ export default function Page() {
   const getAuthToken = useCallback(() => authToken ?? getStoredToken(), [authToken]);
 
   const forceLogout = useCallback(() => {
-    clearAuth();
     setAuthToken(null);
     setSupportUser(null);
     setUser(null);
     setTickets([]);
     setTransactions([]);
     setCards([]);
-    router.replace("/login");
-  }, [router]);
+    redirectToLogin();
+  }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const storedToken = getStoredToken();
 
     if (!storedToken) {
-      router.replace("/login");
+      redirectToLogin();
       return;
     }
 
     setAuthToken(storedToken);
 
-    apiFetch(`${apiBase}/api/auth/dashboard/session`, storedToken, undefined, forceLogout)
-      .then(async (res) => {
+    (async () => {
+      try {
+        const res = await apiFetch(
+          `${apiBase}/api/auth/dashboard/session`,
+          storedToken,
+          undefined,
+          forceLogout
+        );
+        if (cancelled) return;
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.authenticated) {
           forceLogout();
@@ -130,15 +135,17 @@ export default function Page() {
         }
         if (data.token) setStoredToken(data.token);
         setSupportUser({ email: data.user.email });
-        loadAllTickets(undefined, storedToken);
-      })
-      .catch(() => {
-        forceLogout();
-      })
-      .finally(() => {
-        setAuthLoading(false);
-      });
-  }, [router, forceLogout]);
+        await loadAllTickets(undefined, data.token ?? storedToken);
+        if (!cancelled) setAuthLoading(false);
+      } catch {
+        if (!cancelled) forceLogout();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [forceLogout]);
 
   useEffect(() => {
     return () => {
@@ -157,9 +164,11 @@ export default function Page() {
 
   async function handleLogout() {
     const token = getAuthToken();
-    await apiFetch(`${apiBase}/api/auth/dashboard/logout`, token, { method: "POST" });
-    forceLogout();
-    router.refresh();
+    try {
+      await apiFetch(`${apiBase}/api/auth/dashboard/logout`, token, { method: "POST" });
+    } finally {
+      forceLogout();
+    }
   }
 
   async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
