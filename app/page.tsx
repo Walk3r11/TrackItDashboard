@@ -6,6 +6,13 @@ import { useRouter } from "next/navigation";
 import TicketChat from "@/components/TicketChat";
 import GroqQuery from "@/components/GroqQuery";
 import { useWebSocket } from "@/lib/useWebSocket";
+import {
+  apiFetch,
+  clearAuth,
+  getApiBase,
+  getStoredToken,
+  setStoredToken,
+} from "@/lib/dashboard-api";
 
 type User = {
   id: string;
@@ -42,15 +49,9 @@ type CardItem = {
 };
 
 const dateLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "https://backend-production-0eac.up.railway.app";
+const apiBase = getApiBase();
 const euroCutover = new Date("2026-01-01T00:00:00Z");
 const bgnToEur = 1.95583;
-const authStorageKey = "trackit_dashboard_token";
-
-const buildAuthHeaders = (token: string | null, extra?: HeadersInit): HeadersInit => ({
-  ...(extra ?? {}),
-  ...(token ? { Authorization: `Bearer ${token}` } : {}),
-});
 
 const getTransactionId = (tx: any): string | null => {
   if (!tx) return null;
@@ -97,53 +98,47 @@ export default function Page() {
   const [authToken, setAuthToken] = useState<string | null>(null);
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const userSectionRef = useRef<HTMLElement | null>(null);
-  const getAuthToken = useCallback(() => {
-    if (authToken) return authToken;
-    if (typeof window === "undefined") return null;
-    const stored = window.localStorage.getItem(authStorageKey);
-    if (stored) return stored;
-    const cookieToken = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("auth-token="))
-      ?.split("=")[1];
-    return cookieToken ?? null;
-  }, [authToken]);
+  const getAuthToken = useCallback(() => authToken ?? getStoredToken(), [authToken]);
+
+  const forceLogout = useCallback(() => {
+    clearAuth();
+    setAuthToken(null);
+    setSupportUser(null);
+    setUser(null);
+    setTickets([]);
+    setTransactions([]);
+    setCards([]);
+    router.replace("/login");
+  }, [router]);
 
   useEffect(() => {
-    const storedToken = getAuthToken();
+    const storedToken = getStoredToken();
 
     if (!storedToken) {
-      setAuthLoading(false);
-      router.push("/login");
+      router.replace("/login");
       return;
     }
 
     setAuthToken(storedToken);
 
-    fetch(`${apiBase}/api/auth/dashboard/session`, {
-      headers: buildAuthHeaders(storedToken),
-      cache: "no-store",
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.authenticated) {
-          setSupportUser({ email: data.user.email });
-          loadAllTickets(undefined, storedToken);
-        } else {
-          window.localStorage.removeItem(authStorageKey);
-          setAuthToken(null);
-          router.push("/login");
+    apiFetch(`${apiBase}/api/auth/dashboard/session`, storedToken, undefined, forceLogout)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.authenticated) {
+          forceLogout();
+          return;
         }
+        if (data.token) setStoredToken(data.token);
+        setSupportUser({ email: data.user.email });
+        loadAllTickets(undefined, storedToken);
       })
       .catch(() => {
-        window.localStorage.removeItem(authStorageKey);
-        setAuthToken(null);
-        router.push("/login");
+        forceLogout();
       })
       .finally(() => {
         setAuthLoading(false);
       });
-  }, [router]);
+  }, [router, forceLogout]);
 
   useEffect(() => {
     return () => {
@@ -161,14 +156,9 @@ export default function Page() {
   }, [user?.id]);
 
   async function handleLogout() {
-    const token = authToken ?? (typeof window !== "undefined" ? window.localStorage.getItem(authStorageKey) : null);
-    await fetch(`${apiBase}/api/auth/dashboard/logout`, {
-      method: "POST",
-      headers: buildAuthHeaders(token),
-    });
-    window.localStorage.removeItem(authStorageKey);
-    setAuthToken(null);
-    router.push("/login");
+    const token = getAuthToken();
+    await apiFetch(`${apiBase}/api/auth/dashboard/logout`, token, { method: "POST" });
+    forceLogout();
     router.refresh();
   }
 
@@ -180,10 +170,7 @@ export default function Page() {
     try {
       const base = apiBase;
       const lookupUrl = `${base}/api/users/lookup?query=${encodeURIComponent(query.trim())}`;
-      const res = await fetch(lookupUrl, {
-        cache: "no-store",
-        headers: buildAuthHeaders(getAuthToken()),
-      });
+      const res = await apiFetch(lookupUrl, getAuthToken(), undefined, forceLogout);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "User not found");
@@ -222,10 +209,7 @@ export default function Page() {
     try {
       const base = apiBase;
       const url = `${base}/api/tickets${status ? `?status=${status}` : ""}`;
-      const res = await fetch(url, {
-        cache: "no-store",
-        headers: buildAuthHeaders(tokenOverride ?? getAuthToken()),
-      });
+      const res = await apiFetch(url, tokenOverride ?? getAuthToken(), undefined, forceLogout);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "Failed to load tickets");
@@ -243,7 +227,7 @@ export default function Page() {
     } catch (err) {
       setTickets([]);
     }
-  }, [getAuthToken]);
+  }, [getAuthToken, forceLogout]);
 
   const loadTickets = useCallback(async (userId: string) => {
     try {
@@ -251,10 +235,7 @@ export default function Page() {
       const url = new URL(`${base}/api/tickets`);
       url.searchParams.set("userId", userId);
       url.searchParams.set("ts", Date.now().toString());
-      const res = await fetch(url, {
-        cache: "no-store",
-        headers: buildAuthHeaders(getAuthToken()),
-      });
+      const res = await apiFetch(url.toString(), getAuthToken(), undefined, forceLogout);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "Failed to load tickets");
@@ -272,7 +253,7 @@ export default function Page() {
     } catch (err) {
       setTickets([]);
     }
-  }, [getAuthToken]);
+  }, [getAuthToken, forceLogout]);
 
   const loadTransactions = useCallback(async (userId: string) => {
     try {
@@ -280,10 +261,7 @@ export default function Page() {
       const url = new URL(`${base}/api/transactions`);
       url.searchParams.set("userId", userId);
       url.searchParams.set("ts", Date.now().toString());
-      const res = await fetch(url, {
-        cache: "no-store",
-        headers: buildAuthHeaders(getAuthToken()),
-      });
+      const res = await apiFetch(url.toString(), getAuthToken(), undefined, forceLogout);
       if (!res.ok) throw new Error("Transactions request failed");
       const body = await res.json();
       const mapped = (body.transactions ?? [])
@@ -293,7 +271,7 @@ export default function Page() {
     } catch (err) {
       setTransactions([]);
     }
-  }, [getAuthToken]);
+  }, [getAuthToken, forceLogout]);
 
   const loadCards = useCallback(async (userId: string) => {
     try {
@@ -301,10 +279,7 @@ export default function Page() {
       const url = new URL(`${base}/api/cards`);
       url.searchParams.set("userId", userId);
       url.searchParams.set("ts", Date.now().toString());
-      const res = await fetch(url, {
-        cache: "no-store",
-        headers: buildAuthHeaders(getAuthToken()),
-      });
+      const res = await apiFetch(url.toString(), getAuthToken(), undefined, forceLogout);
       if (!res.ok) throw new Error("Cards request failed");
       const body = await res.json();
       const toNumber = (val: any): number => {
@@ -323,7 +298,7 @@ export default function Page() {
     } catch (err) {
       setCards([]);
     }
-  }, [getAuthToken]);
+  }, [getAuthToken, forceLogout]);
 
   const scheduleUserRefresh = useCallback((delay = 250) => {
     if (!user?.id) return;
@@ -477,7 +452,7 @@ export default function Page() {
     return () => clearInterval(interval);
   }, [user?.id, authToken, ticketStatus, loadAllTickets]);
 
-  if (authLoading) {
+  if (authLoading || !authToken || !supportUser) {
     return (
       <main className="relative overflow-hidden min-h-screen">
         <div className="grid-overlay" />

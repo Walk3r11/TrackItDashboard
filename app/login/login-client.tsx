@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
+import { getApiBase, setStoredToken } from "@/lib/dashboard-api";
 
 type FormState = "idle" | "loading" | "error";
 
@@ -19,12 +20,13 @@ export default function LoginClient() {
     setState("loading");
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? "https://backend-production-0eac.up.railway.app";
+      const apiBase = getApiBase();
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 10000);
       const response = await fetch(`${apiBase}/api/auth/dashboard/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           password: password
@@ -41,8 +43,7 @@ export default function LoginClient() {
       }
 
       if (data.token) {
-        localStorage.setItem("trackit_dashboard_token", data.token);
-        document.cookie = `auth-token=${data.token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax; Secure`;
+        setStoredToken(data.token);
       }
 
       router.push("/");
